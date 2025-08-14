@@ -7,10 +7,10 @@ const scene = new THREE.Scene();
 
 // Camera
 const camera = new THREE.PerspectiveCamera(
-  45,
-  window.innerWidth / window.innerHeight,
-  0.1, // near clipping plane
-  100000 // far clipping plane
+    45,
+    window.innerWidth / window.innerHeight,
+    0.1, // near clipping plane
+    100000 // far clipping plane
 );
 camera.position.set(0, 0, 300); // (0, 1, 3)
 
@@ -30,33 +30,40 @@ scene.add(light);
 // Load GLB model
 const loader = new GLTFLoader();
 loader.load(
-  'skull_model_01_04.glb', // Replace with your file path
-  (gltf) => {
-    gltf.scene.traverse((child) => {
-      if (child.isMesh) {
-        child.material = new THREE.MeshNormalMaterial();
-      }
-    });
-    scene.add(gltf.scene);
-  },
-  undefined,
-  (error) => {
-    console.error('Error loading GLB model:', error);
-  }
+    'skull_model_01_04.glb', // Replace with your file path
+    (gltf) => {
+        gltf.scene.traverse((child) => {
+            if (child.isMesh) {
+                child.material = new THREE.MeshNormalMaterial();
+            }
+        });
+        scene.add(gltf.scene);
+    },
+    undefined,
+    (error) => {
+        console.error('Error loading GLB model:', error);
+    }
 );
 
 // Resize handling
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // Animation loop
 function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+
+    if (model) {
+        const maxRotation = Math.PI / 6;
+        model.rotation.y = mouse.x * maxRotation;
+        model.rotation.x = mouse.y * maxRotation;
+    }
+
+    controls.update();
+    renderer.render(scene, camera);
 }
 
 animate();
