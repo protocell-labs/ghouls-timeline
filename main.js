@@ -16,6 +16,14 @@ let pxFactor = 3; // ↑ bigger = chunkier pixels (try 3–8)
 
 
 
+// Choose your own colors here (hex). Examples:
+const userPalette = [
+  '#0b0b0b', '#1b1b3a', '#6930c3', '#80ffdb',
+  '#48bfe3', '#64dfdf', '#ffd166', '#ef476f',
+  '#f8f9fa', '#06d6a0', '#118ab2', '#073b4c'
+];
+
+
 
 const clock = new THREE.Clock();
 
@@ -155,29 +163,80 @@ const postScene = new THREE.Scene();
 const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
 
-// Simple shader that just samples the render target (no wobble)
+
+// palette-quantizing shader
+const MAX_COLORS = 32; // safe upper bound for WebGL1/2
 const postMaterial = new THREE.ShaderMaterial({
-    uniforms: {
-        tDiffuse: { value: rt.texture }
-    },
-    vertexShader: /* glsl */`
+  uniforms: {
+    tDiffuse:    { value: rt.texture },
+    palette:     { value: new Array(MAX_COLORS).fill(new THREE.Vector3(0,0,0)) },
+    paletteSize: { value: 0 }
+  },
+  vertexShader: /* glsl */`
     varying vec2 vUv;
     void main() {
       vUv = uv;
       gl_Position = vec4(position, 1.0);
     }
   `,
-    fragmentShader: /* glsl */`
+  fragmentShader: /* glsl */`
+    precision highp float;
     uniform sampler2D tDiffuse;
+    uniform vec3 palette[${MAX_COLORS}];
+    uniform int paletteSize;
     varying vec2 vUv;
+
+    // Optional: convert to perceptual-ish space before distance.
+    // For simplicity, plain linear RGB distance works and is fast.
+
     void main() {
-      gl_FragColor = texture2D(tDiffuse, vUv);
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+
+      float bestDist = 1e9;
+      vec3  best = c;
+
+      for (int i = 0; i < ${MAX_COLORS}; i++) {
+        if (i >= paletteSize) break;
+        vec3 p = palette[i];
+        // Euclidean distance in linear RGB:
+        vec3 d = c - p;
+        float dist = dot(d, d);
+        if (dist < bestDist) { bestDist = dist; best = p; }
+      }
+
+      gl_FragColor = vec4(best, 1.0);
     }
   `,
-    depthTest: false,
-    depthWrite: false
+  depthTest: false,
+  depthWrite: false
 });
 postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMaterial));
+
+
+
+// If your renderer/outputEncoding is left as default (linear), we can pass linear values.
+// If you ever set sRGB encoding on the renderer or target, convert accordingly.
+function hexToLinearVec3(hex) {
+  const c = new THREE.Color(hex); // THREE.Color stores linear values by default in r,g,b (0–1)
+  return new THREE.Vector3(c.r, c.g, c.b);
+}
+
+function setPalette(hexArray) {
+  const size = Math.min(hexArray.length, MAX_COLORS);
+  const vecs = new Array(MAX_COLORS).fill(new THREE.Vector3(0,0,0));
+
+  for (let i = 0; i < size; i++) vecs[i] = hexToLinearVec3(hexArray[i]);
+
+  // Important: assign a fresh array so Three uploads the uniform array properly
+  postMaterial.uniforms.palette.value = vecs;
+  postMaterial.uniforms.paletteSize.value = size;
+}
+
+// Call once after creating postMaterial (or anytime you change colors):
+setPalette(userPalette);
+
+
+
 
 // Helper to build a low-res render target with nearest upscaling
 function makeRenderTarget(w, h, factor) {
@@ -193,6 +252,8 @@ function makeRenderTarget(w, h, factor) {
     target.texture.generateMipmaps = false; // keeps pixels clean
     return target;
 }
+
+
 
 
 
