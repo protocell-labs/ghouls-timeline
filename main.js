@@ -15,12 +15,23 @@ let shouldReset = false; // trigger for the skull rotation reset when the mouse 
 let pxFactor = 3; // ↑ bigger = chunkier pixels (try 3–8)
 
 
+let jawOpen = 0;          // smoothed value (0 closed .. 1 open)
+let targetJawOpen = 0;    // current target
+let nextJawEvent = 0;     // time until we change state again
+let skull, jaw, skullMirror, jawMirror;
+
+
+export function setJawOpen01(v) {
+    targetJawOpen = THREE.MathUtils.clamp(v, 0, 1);
+}
+
+
 
 // Choose your own colors here (hex). Examples:
 const userPalette = [
-  '#0b0b0b', '#1b1b3a', '#6930c3', '#80ffdb',
-  '#48bfe3', '#64dfdf', '#ffd166', '#ef476f',
-  '#f8f9fa', '#06d6a0', '#118ab2', '#073b4c'
+    '#0b0b0b', '#1b1b3a', '#6930c3', '#80ffdb',
+    '#48bfe3', '#64dfdf', '#ffd166', '#ef476f',
+    '#f8f9fa', '#06d6a0', '#118ab2', '#073b4c'
 ];
 
 
@@ -137,24 +148,61 @@ controls.enableDamping = true;
 const light = new THREE.HemisphereLight(0xffffff, 0x444444);
 scene.add(light);
 
+
+
+
+
 // Load GLB model
 const loader = new GLTFLoader();
-loader.load(
-    'skull_model_01_04.glb',
-    (gltf) => {
-        model = gltf.scene;
-        model.traverse((child) => {
-            if (child.isMesh) {
-                child.material = new THREE.MeshNormalMaterial();
-            }
+
+// Parent group to move/rotate/scale the whole head together
+const head = new THREE.Group();
+scene.add(head);
+
+
+(async function loadHeadParts() {
+    try {
+        const [skullGltf, jawGltf] = await Promise.all([
+            loader.loadAsync('skull_model_01_05_skull.glb'),
+            loader.loadAsync('skull_model_01_05_jaw.glb'),
+        ]);
+
+        // Base halves
+        skull = skullGltf.scene;
+        jaw = jawGltf.scene;
+
+        // Apply Normal material (DoubleSide so mirrored geometry draws correctly)
+        [skull, jaw].forEach((obj) => {
+            obj.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+                    // Optional niceties:
+                    // child.frustumCulled = false;
+                    // child.castShadow = child.receiveShadow = false;
+                }
+            });
         });
-        scene.add(model);
-    },
-    undefined,
-    (error) => {
-        console.error('Error loading GLB model:', error);
+
+        // ----- Mirror across YZ plane (flip X) -----
+        skullMirror = skull.clone();
+        skullMirror.scale.x *= -1;
+
+        jawMirror = jaw.clone();
+        jawMirror.scale.x *= -1;
+
+        // Add all to the head group
+        head.add(skull);
+        head.add(skullMirror);
+        head.add(jaw);
+        head.add(jawMirror);
+
+        console.log('Head parts loaded: skull + mirrored, jaw + mirrored');
+
+    } catch (e) {
+        console.error('Error loading head parts:', e);
     }
-);
+})();
+
 
 
 
@@ -167,19 +215,19 @@ const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 // palette-quantizing shader
 const MAX_COLORS = 32; // safe upper bound for WebGL1/2
 const postMaterial = new THREE.ShaderMaterial({
-  uniforms: {
-    tDiffuse:    { value: rt.texture },
-    palette:     { value: new Array(MAX_COLORS).fill(new THREE.Vector3(0,0,0)) },
-    paletteSize: { value: 0 }
-  },
-  vertexShader: /* glsl */`
+    uniforms: {
+        tDiffuse: { value: rt.texture },
+        palette: { value: new Array(MAX_COLORS).fill(new THREE.Vector3(0, 0, 0)) },
+        paletteSize: { value: 0 }
+    },
+    vertexShader: /* glsl */`
     varying vec2 vUv;
     void main() {
       vUv = uv;
       gl_Position = vec4(position, 1.0);
     }
   `,
-  fragmentShader: /* glsl */`
+    fragmentShader: /* glsl */`
     precision highp float;
     uniform sampler2D tDiffuse;
     uniform vec3 palette[${MAX_COLORS}];
@@ -207,8 +255,8 @@ const postMaterial = new THREE.ShaderMaterial({
       gl_FragColor = vec4(best, 1.0);
     }
   `,
-  depthTest: false,
-  depthWrite: false
+    depthTest: false,
+    depthWrite: false
 });
 postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMaterial));
 
@@ -217,19 +265,19 @@ postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMaterial));
 // If your renderer/outputEncoding is left as default (linear), we can pass linear values.
 // If you ever set sRGB encoding on the renderer or target, convert accordingly.
 function hexToLinearVec3(hex) {
-  const c = new THREE.Color(hex); // THREE.Color stores linear values by default in r,g,b (0–1)
-  return new THREE.Vector3(c.r, c.g, c.b);
+    const c = new THREE.Color(hex); // THREE.Color stores linear values by default in r,g,b (0–1)
+    return new THREE.Vector3(c.r, c.g, c.b);
 }
 
 function setPalette(hexArray) {
-  const size = Math.min(hexArray.length, MAX_COLORS);
-  const vecs = new Array(MAX_COLORS).fill(new THREE.Vector3(0,0,0));
+    const size = Math.min(hexArray.length, MAX_COLORS);
+    const vecs = new Array(MAX_COLORS).fill(new THREE.Vector3(0, 0, 0));
 
-  for (let i = 0; i < size; i++) vecs[i] = hexToLinearVec3(hexArray[i]);
+    for (let i = 0; i < size; i++) vecs[i] = hexToLinearVec3(hexArray[i]);
 
-  // Important: assign a fresh array so Three uploads the uniform array properly
-  postMaterial.uniforms.palette.value = vecs;
-  postMaterial.uniforms.paletteSize.value = size;
+    // Important: assign a fresh array so Three uploads the uniform array properly
+    postMaterial.uniforms.palette.value = vecs;
+    postMaterial.uniforms.paletteSize.value = size;
 }
 
 // Call once after creating postMaterial (or anytime you change colors):
@@ -280,48 +328,84 @@ function animate() {
 
     const t = clock.getElapsedTime();
 
-
-    if (model) {
-        // Idle offset (small sinusoidal sway)
+    // ---------- HEAD ORIENTATION (mouse tracking + idle + reset) ----------
+    if (head) {
+        // tiny “alive” sway
         const idleX = idle.ampX * Math.sin(t * idle.speedX * Math.PI * 2.0);
         const idleY = idle.ampY * Math.sin(t * idle.speedY * Math.PI * 2.0 + Math.PI / 3);
 
         let targetX, targetY, lerp;
-
         if (mouseInWindow) {
-            // Follow mouse + idle
             targetX = targetRotation.x + idleX;
             targetY = targetRotation.y + idleY;
             lerp = trackLerp;
         } else if (!shouldReset) {
-            // During the delay window: keep a gentle drift (no freeze)
-            // Drift toward last target slowly + idle
+            // during delay: keep drifting toward last target
             targetX = targetRotation.x + idleX;
             targetY = targetRotation.y + idleY;
             lerp = outLerp;
         } else {
-            // Reset to center but still with idle overlay
-            targetX = 0 + idleX;
-            targetY = 0 + idleY;
+            // reset toward center, still breathing
+            targetX = idleX;
+            targetY = idleY;
             lerp = resetLerp;
         }
 
-        model.rotation.x += (targetX - model.rotation.x) * lerp;
-        model.rotation.y += (targetY - model.rotation.y) * lerp;
+        head.rotation.x += (targetX - head.rotation.x) * lerp;
+        head.rotation.y += (targetY - head.rotation.y) * lerp;
     }
+
+    // ---------- JAW ANIMATION (random only when mouse inside; closed when outside) ----------
+    if (jaw && jawMirror) {
+        // If mouse is outside, force closed and push next event a bit
+        if (!mouseInWindow) {
+            targetJawOpen = 0;                 // force closed
+            nextJawEvent = t + 0.4;            // small buffer so it doesn't pop open instantly on re-enter
+        } else {
+            // Mouse inside: allow random open/close timing
+            if (t > nextJawEvent) {
+                if (targetJawOpen === 0) {
+                    targetJawOpen = 1; // open
+                    nextJawEvent = t + THREE.MathUtils.randFloat(0.5, 1.5); // open duration
+                } else {
+                    targetJawOpen = 0; // close
+                    nextJawEvent = t + THREE.MathUtils.randFloat(2.0, 5.0); // closed duration
+                }
+            }
+        }
+
+        // Smooth jaw openness toward target (0..1)
+        jawOpen += (targetJawOpen - jawOpen) * 0.05;
+
+        // Max opening angle (tweak to taste)
+        const maxOpen = THREE.MathUtils.degToRad(28);
+
+        // No idle chatter when closed OR when mouse is outside
+        const openFactor = (mouseInWindow) ? THREE.MathUtils.smoothstep(jawOpen, 0.05, 0.30) : 0.0;
+        const idleAmp = THREE.MathUtils.degToRad(mouseInWindow ? 0.5 : 0.0) * openFactor;
+        const idleSpeed = 2.2;
+        const idleOffset = idleAmp * Math.sin(t * idleSpeed * Math.PI * 2.0);
+
+        // Final angle
+        const angle = (jawOpen * maxOpen) + idleOffset;
+
+        // Rotate around the horizontal hinge (use .y if your asset needs Y)
+        jaw.rotation.x = angle;
+        jawMirror.rotation.x = angle;
+    }
+
+
 
     controls.update();
 
-    // Pass 1: render the 3D scene to the low-res target
+    // ---------- POST: pixelated two-pass render ----------
     renderer.setRenderTarget(rt);
     renderer.clear();
     renderer.render(scene, camera);
 
-    // Pass 2: render the upscaled quad to the screen
     renderer.setRenderTarget(null);
     renderer.render(postScene, postCam);
-
-
 }
+
 
 animate();
