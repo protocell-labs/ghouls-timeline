@@ -18,7 +18,7 @@ let pxFactor = 3; // ↑ bigger = chunkier pixels (try 3–8)
 let jawOpen = 0;          // smoothed value (0 closed .. 1 open)
 let targetJawOpen = 0;    // current target
 let nextJawEvent = 0;     // time until we change state again
-let skull, jaw, skullMirror, jawMirror;
+let skull, jaw;
 
 
 export function setJawOpen01(v) {
@@ -163,15 +163,15 @@ scene.add(head);
 (async function loadHeadParts() {
     try {
         const [skullGltf, jawGltf] = await Promise.all([
-            loader.loadAsync('skull_model_01_05_skull.glb'),
-            loader.loadAsync('skull_model_01_05_jaw.glb'),
+            loader.loadAsync('skull_model_01_06_skull.glb'),
+            loader.loadAsync('skull_model_01_06_jaw.glb'),
         ]);
 
         // Base halves
         skull = skullGltf.scene;
         jaw = jawGltf.scene;
 
-        // Apply Normal material (DoubleSide so mirrored geometry draws correctly)
+        // Apply Normal material (DoubleSide so geometry draws correctly)
         [skull, jaw].forEach((obj) => {
             obj.traverse((child) => {
                 if (child.isMesh) {
@@ -183,20 +183,11 @@ scene.add(head);
             });
         });
 
-        // ----- Mirror across YZ plane (flip X) -----
-        skullMirror = skull.clone();
-        skullMirror.scale.x *= -1;
-
-        jawMirror = jaw.clone();
-        jawMirror.scale.x *= -1;
-
-        // Add all to the head group
+        // Add skull and jaw to the head group
         head.add(skull);
-        head.add(skullMirror);
         head.add(jaw);
-        head.add(jawMirror);
 
-        console.log('Head parts loaded: skull + mirrored, jaw + mirrored');
+        console.log('Head parts loaded: skull + jaw');
 
     } catch (e) {
         console.error('Error loading head parts:', e);
@@ -356,7 +347,7 @@ function animate() {
     }
 
     // ---------- JAW ANIMATION (random only when mouse inside; closed when outside) ----------
-    if (jaw && jawMirror) {
+    if (jaw) {
         // If mouse is outside, force closed and push next event a bit
         if (!mouseInWindow) {
             targetJawOpen = 0;                 // force closed
@@ -389,9 +380,8 @@ function animate() {
         // Final angle
         const angle = (jawOpen * maxOpen) + idleOffset;
 
-        // Rotate around the horizontal hinge (use .y if your asset needs Y)
+        // Rotate around the horizontal hinge
         jaw.rotation.x = angle;
-        jawMirror.rotation.x = angle;
     }
 
 
