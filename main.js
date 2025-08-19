@@ -12,13 +12,27 @@ const rotationLerpSpeed = 0.05;        // controls how fast the skull follows (0
 let mouseInWindow = true; // checks if the mouse is inside the window
 let resetTimer = null; // timer for the skull rotation reset when the mouse leaves the screen
 let shouldReset = false; // trigger for the skull rotation reset when the mouse leaves the screen
-let pxFactor = 3; // ↑ bigger = chunkier pixels (try 3–8)
+let pxFactor = 3; // ↑ bigger = chunkier pixels
 
 
 let jawOpen = 0;          // smoothed value (0 closed .. 1 open)
 let targetJawOpen = 0;    // current target
 let nextJawEvent = 0;     // time until we change state again
 let skull, jaw;
+
+
+
+
+
+
+// --- Blue-noise texture (tiling) ---
+const noiseTex = new THREE.TextureLoader().load('HDR_L_15.png', (tex) => {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.minFilter = THREE.NearestFilter;
+    tex.magFilter = THREE.NearestFilter;
+    tex.generateMipmaps = false;
+});
+
 
 
 export function setJawOpen01(v) {
@@ -197,6 +211,9 @@ scene.add(head);
 
 
 
+
+
+
 // A tiny post scene with an orthographic camera and a full-screen quad
 const postScene = new THREE.Scene();
 const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -205,51 +222,134 @@ const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
 // palette-quantizing shader
 const MAX_COLORS = 32; // safe upper bound for WebGL1/2
+
 const postMaterial = new THREE.ShaderMaterial({
     uniforms: {
+        // Inputs
         tDiffuse: { value: rt.texture },
+        blueNoise: { value: noiseTex },
+
+        // Palette
         palette: { value: new Array(MAX_COLORS).fill(new THREE.Vector3(0, 0, 0)) },
-        paletteSize: { value: 0 }
+        paletteSize: { value: 0 },
+
+        // Sizes
+        rtSize: {
+            value: new THREE.Vector2(             // low-res RT size in pixels
+                Math.max(1, Math.floor(window.innerWidth / pxFactor)),
+                Math.max(1, Math.floor(window.innerHeight / pxFactor))
+            )
+        },
+
+        // Controls
+        ditherPixelSize: { value: 2.0 },   // in *RT pixels* now (try 1–6)
+        ditherStrength: { value: 0.75 },  // 0..1
+        uTime: { value: 0.0 }    // animated grain offset
     },
+
+    // NOTE: keep GLSL1 (no glslVersion), use standard transform for portability
     vertexShader: /* glsl */`
+    precision highp float;
+    precision highp int;
+
     varying vec2 vUv;
+
     void main() {
       vUv = uv;
-      gl_Position = vec4(position, 1.0);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
   `,
+
     fragmentShader: /* glsl */`
     precision highp float;
+    precision highp int;
+
     uniform sampler2D tDiffuse;
-    uniform vec3 palette[${MAX_COLORS}];
-    uniform int paletteSize;
+    uniform sampler2D blueNoise;
+
+    uniform vec3  palette[${MAX_COLORS}];
+    uniform int   paletteSize;
+
+    uniform vec2  rtSize;           // low-res target size (pixels)
+    uniform float ditherPixelSize;  // size of noise cell in *RT pixels*
+    uniform float ditherStrength;   // 0..1
+    uniform float uTime;            // animated grain
+
     varying vec2 vUv;
 
-    // Optional: convert to perceptual-ish space before distance.
-    // For simplicity, plain linear RGB distance works and is fast.
-
-    void main() {
-      vec3 c = texture2D(tDiffuse, vUv).rgb;
-
-      float bestDist = 1e9;
-      vec3  best = c;
-
+    void findTwoNearest(in vec3 c, out int iBest, out int iSecond, out float dBest, out float dSecond) {
+      dBest   = 1e9;  iBest   = 0;
+      dSecond = 1e9;  iSecond = 0;
       for (int i = 0; i < ${MAX_COLORS}; i++) {
         if (i >= paletteSize) break;
         vec3 p = palette[i];
-        // Euclidean distance in linear RGB:
         vec3 d = c - p;
         float dist = dot(d, d);
-        if (dist < bestDist) { bestDist = dist; best = p; }
+        if (dist < dBest) {
+          dSecond = dBest;  iSecond = iBest;
+          dBest   = dist;   iBest   = i;
+        } else if (dist < dSecond) {
+          dSecond = dist;   iSecond = i;
+        }
       }
+    }
 
-      gl_FragColor = vec4(best, 1.0);
+    void main() {
+      // Color from pixelated RT
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+
+      // Find two nearest palette colors
+      int iBest, iSecond; float dBest, dSecond;
+      findTwoNearest(c, iBest, iSecond, dBest, dSecond);
+      vec3 pBest   = palette[iBest];
+      vec3 pSecond = palette[iSecond];
+
+      // Screen-aligned blue-noise BUT scaled by RT pixels
+      // Convert to RT pixel coordinates so 1.0 = one virtual pixel
+      vec2 fragPx = vUv * rtSize;
+      vec2 nUv    = fragPx / max(ditherPixelSize, 1.0);
+
+      // Animated tiny drift to avoid static grain
+      nUv += vec2(fract(uTime * 0.0), -fract(uTime * 0.15));
+
+      float n = texture2D(blueNoise, nUv).r; // 0..1
+
+      // Probability to pick the second color from distances
+      float a = sqrt(max(dBest,   0.0));
+      float b = sqrt(max(dSecond, 0.0));
+      float total = max(a + b, 1e-6);
+      float probSecond = (a / total);
+      probSecond = mix(0.0, probSecond, clamp(ditherStrength, 0.0, 1.0));
+
+      vec3 outColor = (n < probSecond) ? pSecond : pBest;
+      gl_FragColor = vec4(outColor, 1.0);
     }
   `,
+
     depthTest: false,
     depthWrite: false
 });
+
+
 postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMaterial));
+
+
+
+
+
+// After you create rt (and any time you rebuild it on resize)
+postMaterial.uniforms.tDiffuse.value = rt.texture;
+postMaterial.uniforms.rtSize.value.set(
+    Math.max(1, Math.floor(window.innerWidth / pxFactor)),
+    Math.max(1, Math.floor(window.innerHeight / pxFactor))
+);
+
+// Optional knobs:
+postMaterial.uniforms.ditherPixelSize.value = 100.0; // blue noise grain size
+postMaterial.uniforms.ditherStrength.value = 0.5; // 0.0 (none) to 1.0 (strong)
+
+
+
 
 
 
@@ -305,10 +405,16 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
 
-    // Rebuild low-res target to match new size
+    // Update rtSize for dithering
     rt.dispose();
     rt = makeRenderTarget(w, h, pxFactor);
     postMaterial.uniforms.tDiffuse.value = rt.texture;
+    postMaterial.uniforms.rtSize.value.set(
+        Math.max(1, Math.floor(w / pxFactor)),
+        Math.max(1, Math.floor(h / pxFactor))
+    );
+
+
 });
 
 
@@ -318,6 +424,7 @@ function animate() {
     requestAnimationFrame(animate);
 
     const t = clock.getElapsedTime();
+    postMaterial.uniforms.uTime.value = t;
 
     // ---------- HEAD ORIENTATION (mouse tracking + idle + reset) ----------
     if (head) {
