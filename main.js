@@ -510,6 +510,31 @@ window.addEventListener('resize', () => {
 
 
 
+// ---------- SCREENSHOT KEY ("s") ----------
+window.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 's') {
+    // 1) Force a render of the final pass to screen
+    renderer.setRenderTarget(null);
+    bloomComposer.render();   // run bloom pipeline
+
+    // 2) Then capture
+    const dataURL = renderer.domElement.toDataURL('image/png');
+
+    // 3) Build filename
+    const rand = Math.floor(Math.random() * 1000000);
+    const filename = `skullshot_${rand}.png`;
+
+    // 4) Trigger download
+    const link = document.createElement('a');
+    link.href = dataURL;
+    link.download = filename;
+    link.click();
+  }
+});
+
+
+
+
 // Animation loop
 function animate() {
     requestAnimationFrame(animate);
