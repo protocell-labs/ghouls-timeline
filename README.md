@@ -11,7 +11,7 @@
 
 It renders a 3D skull with jaw animation, retro palettes, pixelation, dithering, and bloom effects — all running in real-time in the browser. Includes simple UI controls for palette and material selection, plus screenshot capture.
 
-[Run the artwork live.](https://protocell-labs.github.io/ghouls-timeline/) 💀📺
+[Run the artwork live](https://protocell-labs.github.io/ghouls-timeline/) 💀📺
 
 
 ---

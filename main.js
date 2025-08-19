@@ -28,14 +28,14 @@ let pxFactor = 3; // ↑ bigger = chunkier pixels
 let ditherPixelSize = 300.0; // blue noise grain size
 let ditherStrength = 0.5; // 0.0 (none) to 1.0 (strong)
 
-let bloomStrength = 1.0;
+let bloomStrength = 0.0; // 1.0
 let bloomRadius = 0.1;
 let bloomThreshold = 0.70;
 
 const MAX_COLORS = 32; // for use in quantization shader
 
 const materialOptions = {
-  type: 'Normal', // default
+    type: 'Normal', // default
 };
 
 
@@ -45,7 +45,7 @@ const clock = new THREE.Clock();
 
 
 // --- Blue-noise texture (tiling) ---
-const noiseTex = new THREE.TextureLoader().load('HDR_L_15.png', (tex) => {
+const noiseTex = new THREE.TextureLoader().load('assets/HDR_L_15.png', (tex) => {
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.minFilter = THREE.NearestFilter;
     tex.magFilter = THREE.NearestFilter;
@@ -209,8 +209,8 @@ scene.add(head);
 (async function loadHeadParts() {
     try {
         const [skullGltf, jawGltf] = await Promise.all([
-            loader.loadAsync('skull_model_01_06_skull.glb'),
-            loader.loadAsync('skull_model_01_06_jaw.glb'),
+            loader.loadAsync('assets/skull_model_01_06_skull.glb'),
+            loader.loadAsync('assets/skull_model_01_06_jaw.glb'),
         ]);
 
         // Base halves
@@ -245,26 +245,26 @@ scene.add(head);
 // this will traverse both skull + jaw meshes and swap their material when we switch from GUI
 
 function updateMaterial() {
-  let mat;
-  switch (materialOptions.type) {
-    case 'Lambert':
-      mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-      break;
-    case 'Normal':
-    default:
-      mat = new THREE.MeshNormalMaterial();
-      break;
-  }
-
-  [skull, jaw].forEach((obj) => {
-    if (obj) {
-      obj.traverse((child) => {
-        if (child.isMesh) {
-          child.material = mat;
-        }
-      });
+    let mat;
+    switch (materialOptions.type) {
+        case 'Lambert':
+            mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+            break;
+        case 'Normal':
+        default:
+            mat = new THREE.MeshNormalMaterial();
+            break;
     }
-  });
+
+    [skull, jaw].forEach((obj) => {
+        if (obj) {
+            obj.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = mat;
+                }
+            });
+        }
+    });
 }
 
 updateMaterial();
@@ -488,6 +488,44 @@ makeMaterialGUI('Normal'); // init materials GUI
 
 
 
+// ----------- PARTICLE CLOUD -----------
+const COUNT = 50000;
+const positions = new Float32Array(COUNT * 3);
+
+for (let i = 0; i < COUNT; i++) {
+    const i3 = i * 3;
+
+    // random spherical distribution
+    const r = 180 * Math.cbrt(Math.random()); // radius ~ up to 180 units
+    const phi = Math.acos(2 * Math.random() - 1);
+    const theta = Math.random() * Math.PI * 2;
+
+    positions[i3 + 0] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i3 + 1] = r * Math.cos(phi);
+    positions[i3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+}
+
+const particleGeo = new THREE.BufferGeometry();
+particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+// use a soft circular sprite texture for nicer look (make one 32×32 PNG with white circle + alpha)
+// or skip `map:` to render plain square points
+const particleMat = new THREE.PointsMaterial({
+    size: 3 * window.devicePixelRatio,
+    sizeAttenuation: true,
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.8,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+});
+
+const particleCloud = new THREE.Points(particleGeo, particleMat);
+scene.add(particleCloud);
+
+
+
+
 
 // ---------- Resize handling ----------
 window.addEventListener('resize', () => {
@@ -512,24 +550,24 @@ window.addEventListener('resize', () => {
 
 // ---------- SCREENSHOT KEY ("s") ----------
 window.addEventListener('keydown', (e) => {
-  if (e.key.toLowerCase() === 's') {
-    // 1) Force a render of the final pass to screen
-    renderer.setRenderTarget(null);
-    bloomComposer.render();   // run bloom pipeline
+    if (e.key.toLowerCase() === 's') {
+        // 1) Force a render of the final pass to screen
+        renderer.setRenderTarget(null);
+        bloomComposer.render();   // run bloom pipeline
 
-    // 2) Then capture
-    const dataURL = renderer.domElement.toDataURL('image/png');
+        // 2) Then capture
+        const dataURL = renderer.domElement.toDataURL('image/png');
 
-    // 3) Build filename
-    const rand = Math.floor(Math.random() * 1000000);
-    const filename = `skullshot_${rand}.png`;
+        // 3) Build filename
+        const rand = Math.floor(Math.random() * 1000000);
+        const filename = `skullshot_${rand}.png`;
 
-    // 4) Trigger download
-    const link = document.createElement('a');
-    link.href = dataURL;
-    link.download = filename;
-    link.click();
-  }
+        // 4) Trigger download
+        const link = document.createElement('a');
+        link.href = dataURL;
+        link.download = filename;
+        link.click();
+    }
 });
 
 
@@ -541,7 +579,6 @@ function animate() {
 
     const t = clock.getElapsedTime();
     quantizePass.uniforms.uTime.value = t; // advance animated grain
-    //postMaterial.uniforms.uTime.value = t; // advance animated grain
 
 
     // ---------- HEAD ORIENTATION ----------
@@ -598,6 +635,12 @@ function animate() {
         const angle = (jawOpen * maxOpen) + idleOffset;
         jaw.rotation.x = angle;
     }
+
+    // ---------- PARTICLE ANIMATION ----------
+    if (particleCloud) {
+        particleCloud.rotation.y += 0.001; // slow spin around vertical axis
+    }
+
 
     controls.update();
 
