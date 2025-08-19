@@ -5,14 +5,13 @@
 <p align="center">
   <img src="assets/skullshot_292349.png" width="30%" />
   <img src="assets/skullshot_44074.png" width="30%" />
-  <img src="assets/skullshot_981244.gif" width="30%" />
+  <img src="assets/skullshot_981244.png" width="30%" />
 </p>
 
 
-It renders a 3D skull with jaw animation, retro palettes, pixelation, dithering, and bloom effects — all running in real-time in the browser.  
-Includes simple UI controls for palette and material selection, plus screenshot capture.
+It renders a 3D skull with jaw animation, retro palettes, pixelation, dithering, and bloom effects — all running in real-time in the browser. Includes simple UI controls for palette and material selection, plus screenshot capture.
 
-You can [run the artwork live here](https://protocell-labs.github.io/ghouls-timeline/) 💀📺
+[Run the artwork live.](https://protocell-labs.github.io/ghouls-timeline/) 💀📺
 
 
 ---
