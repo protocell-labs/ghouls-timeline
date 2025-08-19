@@ -34,6 +34,9 @@ let bloomThreshold = 0.70;
 
 const MAX_COLORS = 32; // for use in quantization shader
 
+const materialOptions = {
+  type: 'Normal', // default
+};
 
 
 const clock = new THREE.Clock();
@@ -159,10 +162,20 @@ document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-// Lighting (optional)
-const light = new THREE.HemisphereLight(0xffffff, 0x444444);
-scene.add(light);
+// Lighting
+//const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+//scene.add(hemiLight);
 
+const dirLightA = new THREE.DirectionalLight(0xff0000, 0.8); // red light
+dirLightA.position.set(1, 1, 1);
+const dirLightB = new THREE.DirectionalLight(0x0000ff, 0.4); // blue light
+dirLightB.position.set(-1, -1, 1);
+const dirLightC = new THREE.DirectionalLight(0xffffff, 0.7); // white light
+dirLightC.position.set(1, 0, 0);
+
+scene.add(dirLightA);
+scene.add(dirLightB);
+scene.add(dirLightC);
 
 
 
@@ -229,8 +242,32 @@ scene.add(head);
 
 
 
+// this will traverse both skull + jaw meshes and swap their material when we switch from GUI
 
+function updateMaterial() {
+  let mat;
+  switch (materialOptions.type) {
+    case 'Lambert':
+      mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      break;
+    case 'Normal':
+    default:
+      mat = new THREE.MeshNormalMaterial();
+      break;
+  }
 
+  [skull, jaw].forEach((obj) => {
+    if (obj) {
+      obj.traverse((child) => {
+        if (child.isMesh) {
+          child.material = mat;
+        }
+      });
+    }
+  });
+}
+
+updateMaterial();
 
 
 
@@ -359,15 +396,32 @@ function setPalette(hexArray) {
 
 
 
+// DOM container for the GUI elements - top-right
+/*const guiWrap = document.createElement('div');
+guiWrap.style.position = 'absolute';
+guiWrap.style.top = '10px';
+guiWrap.style.right = '10px';
+guiWrap.style.padding = '8px';
+guiWrap.style.background = 'rgba(0,0,0,0.4)';
+guiWrap.style.borderRadius = '6px';
+guiWrap.style.zIndex = '10';
+document.body.appendChild(guiWrap);
+*/
+
+// Create one container for all GUI controls
+const guiWrap = document.createElement('div');
+guiWrap.id = 'gui-container';
+document.body.appendChild(guiWrap);
+
+
 
 function makePaletteGUI(defaultKey = 'CGA 8') {
     const wrap = document.createElement('div');
-    wrap.id = 'palette-gui';
-    wrap.innerHTML = `
-    <label style="display:block;font:12px/1 system-ui, sans-serif;margin-bottom:6px;color:#ddd">
-      PALETTE
-    </label>
-  `;
+
+    const label = document.createElement('label');
+    label.textContent = 'PALETTE';
+    wrap.appendChild(label);
+
     const select = document.createElement('select');
     for (const name of Object.keys(PALETTES)) {
         const opt = document.createElement('option');
@@ -377,19 +431,59 @@ function makePaletteGUI(defaultKey = 'CGA 8') {
     }
     select.value = defaultKey;
     wrap.appendChild(select);
-    document.body.appendChild(wrap);
+
+    // append into main container
+    guiWrap.appendChild(wrap);
 
     // apply initial palette
     setPalette(PALETTES[select.value]);
 
-    // change handler
     select.addEventListener('change', () => {
         setPalette(PALETTES[select.value]);
     });
 }
 
-// sets default palette at random
+
+function makeMaterialGUI(defaultKey = 'Normal') {
+    const wrap = document.createElement('div');
+
+    const label = document.createElement('label');
+    label.textContent = 'MATERIAL';
+    wrap.appendChild(label);
+
+    const select = document.createElement('select');
+    const materialTypes = ['Normal', 'Lambert'];
+
+    materialTypes.forEach((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+    });
+
+    select.value = defaultKey;
+    wrap.appendChild(select);
+
+    // append into main container
+    guiWrap.appendChild(wrap);
+
+    // update materialOptions and call your existing updateMaterial()
+    materialOptions.type = select.value;
+    updateMaterial();
+
+    select.addEventListener('change', () => {
+        materialOptions.type = select.value;
+        updateMaterial();
+    });
+}
+
+
+
+
+// init palettes GUI - sets default palette at random
 makePaletteGUI(Object.keys(PALETTES)[Math.floor(Math.random() * Object.keys(PALETTES).length)]); // manual override - makePaletteGUI('ZX Spectrum 8');
+makeMaterialGUI('Normal'); // init materials GUI
+
 
 
 

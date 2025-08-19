@@ -9,7 +9,7 @@ canvas {
     image-rendering: crisp-edges;
 }
 
-#palette-gui {
+#gui-container {
     position: fixed;
     top: 12px;
     right: 12px;
@@ -21,7 +21,16 @@ canvas {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
-#palette-gui select {
+/* Shared label style */
+#gui-container label {
+    display: block;
+    margin: 6px 0;
+    font: 12px/1.2 system-ui, sans-serif;
+    color: #ddd;
+}
+
+/* Shared select style */
+#gui-container select {
     min-width: 180px;
     padding: 6px 8px;
     border-radius: 6px;
@@ -30,8 +39,8 @@ canvas {
     color: #eee;
     font: 12px/1.2 system-ui, sans-serif;
     outline: none;
+    margin-bottom: 10px;
 }
-
-#palette-gui select:focus {
+#gui-container select:focus {
     border-color: #888;
 }
