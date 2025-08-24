@@ -178,6 +178,18 @@ const palette_magenta_mono = [
     '#cc00cc', '#ff00ff', '#ff99ff', '#ffffff'
 ];
 
+// 🔵 Classic Monochrome Blue CRT (8 shades)
+const palette_blue_mono = [
+    '#000000', '#000033', '#000066', '#0000aa',
+    '#0000cc', '#0000ff', '#aaaaff', '#ffffff'
+];
+
+// 🔵 Cyan-Tinted Monochrome CRT (8 shades)
+const palette_cyan_mono = [
+    '#000000', '#003333', '#006666', '#009999',
+    '#00cccc', '#00ffff', '#aaffff', '#ffffff'
+];
+
 
 // register palette names so we can select them from a menu
 const PALETTES = {
@@ -202,4 +214,6 @@ const PALETTES = {
     'Green Mono 8': palette_green_mono,
     'Amber Mono 8': palette_amber_mono,
     'Magenta Mono 8': palette_magenta_mono,
+    'Blue Mono 8': palette_blue_mono,
+    'Cyan Mono 8': palette_cyan_mono
 };

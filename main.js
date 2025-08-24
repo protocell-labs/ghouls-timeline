@@ -7,6 +7,10 @@ import { EffectComposer } from 'EffectComposer';
 import { RenderPass } from 'RenderPass';
 import { UnrealBloomPass } from 'UnrealBloomPass';
 import { ShaderPass } from 'ShaderPass';
+import { perlin2D } from './perlin.min.js';
+
+
+
 
 
 
@@ -28,14 +32,18 @@ let pxFactor = 3; // ↑ bigger = chunkier pixels
 let ditherPixelSize = 300.0; // blue noise grain size
 let ditherStrength = 0.5; // 0.0 (none) to 1.0 (strong)
 
-let bloomStrength = 0.0; // 1.0
+let bloomStrength = 0.5; // 1.0
 let bloomRadius = 0.1;
 let bloomThreshold = 0.70;
+
+let particleCloud = null;
+let particleGeo = null;
+let particleMat = null;
 
 const MAX_COLORS = 32; // for use in quantization shader
 
 const materialOptions = {
-    type: 'Normal', // default
+    type: 'Lambert', // default
 };
 
 
@@ -51,6 +59,47 @@ const noiseTex = new THREE.TextureLoader().load('assets/HDR_L_15.png', (tex) => 
     tex.magFilter = THREE.NearestFilter;
     tex.generateMipmaps = false;
 });
+
+
+
+
+
+// ----------- RING PARTICLE PARAMETERS (with Perlin) -----------
+const RINGS = {
+    ringCount: 12,
+    pointsPerRing: 4000,
+    baseRadius: 60,
+    ringSpacing: 18,
+
+    // Gaussian grit
+    radialSigma: 1.2,
+    verticalSigma: 0.8,
+
+    // Perlin controls (now periodic along θ via cos/sin)
+    noiseRadialAmp: 6.0,
+    noiseVerticalAmp: 3.0,
+    noiseThetaFreq: 2.75,  // how many “waves” around a ring
+    noiseRingFreqU: 0.22,  // how much ring index shifts noise U
+    noiseRingFreqV: 0.31,  // how much ring index shifts noise V
+    noiseOffsetU: Math.random() * 1000.0,
+    noiseOffsetV: Math.random() * 1000.0,
+
+    // extra: per-ring angular phase to avoid alignment
+    ringPhaseStep: 0.17,   // radians added per ring
+
+    // appearance
+    sizePx: 1 * window.devicePixelRatio,
+    color: 0x808080,
+    opacity: 0.85
+};
+
+// Gaussian helper
+function randNormal(mean = 0, sigma = 1) {
+    let u = 1 - Math.random(), v = 1 - Math.random();
+    const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    return mean + sigma * z;
+}
+
 
 
 
@@ -151,7 +200,9 @@ const camera = new THREE.PerspectiveCamera(
     0.1, // near clipping plane
     100000 // far clipping plane
 );
-camera.position.set(0, 0, 300); // (0, 1, 3)
+
+camera.position.set(0, -150, 300); // camera position (X, Y - height, Z - depth)
+// change look-at point with controls.target.set(0, -50, 0); after controls are defined
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -161,6 +212,9 @@ document.body.appendChild(renderer.domElement);
 // Controls
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
+
+controls.target.set(0, 50, 0); // look-at point
+controls.update();
 
 // Lighting
 //const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
@@ -221,7 +275,7 @@ scene.add(head);
         [skull, jaw].forEach((obj) => {
             obj.traverse((child) => {
                 if (child.isMesh) {
-                    child.material = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
+                    child.material = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
                     // Optional niceties:
                     // child.frustumCulled = false;
                     // child.castShadow = child.receiveShadow = false;
@@ -248,11 +302,11 @@ function updateMaterial() {
     let mat;
     switch (materialOptions.type) {
         case 'Lambert':
-            mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+            mat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
             break;
         case 'Normal':
         default:
-            mat = new THREE.MeshNormalMaterial();
+            mat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
             break;
     }
 
@@ -396,18 +450,6 @@ function setPalette(hexArray) {
 
 
 
-// DOM container for the GUI elements - top-right
-/*const guiWrap = document.createElement('div');
-guiWrap.style.position = 'absolute';
-guiWrap.style.top = '10px';
-guiWrap.style.right = '10px';
-guiWrap.style.padding = '8px';
-guiWrap.style.background = 'rgba(0,0,0,0.4)';
-guiWrap.style.borderRadius = '6px';
-guiWrap.style.zIndex = '10';
-document.body.appendChild(guiWrap);
-*/
-
 // Create one container for all GUI controls
 const guiWrap = document.createElement('div');
 guiWrap.id = 'gui-container';
@@ -444,7 +486,7 @@ function makePaletteGUI(defaultKey = 'CGA 8') {
 }
 
 
-function makeMaterialGUI(defaultKey = 'Normal') {
+function makeMaterialGUI(defaultKey = 'Lambert') {
     const wrap = document.createElement('div');
 
     const label = document.createElement('label');
@@ -482,46 +524,86 @@ function makeMaterialGUI(defaultKey = 'Normal') {
 
 // init palettes GUI - sets default palette at random
 makePaletteGUI(Object.keys(PALETTES)[Math.floor(Math.random() * Object.keys(PALETTES).length)]); // manual override - makePaletteGUI('ZX Spectrum 8');
-makeMaterialGUI('Normal'); // init materials GUI
+makeMaterialGUI('Lambert'); // init materials GUI
 
 
 
 
 
 // ----------- PARTICLE CLOUD -----------
-const COUNT = 50000;
-const positions = new Float32Array(COUNT * 3);
 
-for (let i = 0; i < COUNT; i++) {
-    const i3 = i * 3;
 
-    // random spherical distribution
-    const r = 180 * Math.cbrt(Math.random()); // radius ~ up to 180 units
-    const phi = Math.acos(2 * Math.random() - 1);
-    const theta = Math.random() * Math.PI * 2;
+function buildRingParticles() {
+    // dispose old
+    if (particleCloud) {
+        scene.remove(particleCloud);
+        particleGeo.dispose();
+        particleMat.dispose();
+        particleCloud = null;
+    }
 
-    positions[i3 + 0] = r * Math.sin(phi) * Math.cos(theta);
-    positions[i3 + 1] = r * Math.cos(phi);
-    positions[i3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    const total = RINGS.ringCount * RINGS.pointsPerRing;
+    const positions = new Float32Array(total * 3);
+
+    let idx = 0;
+    for (let r = 0; r < RINGS.ringCount; r++) {
+        const ringR = RINGS.baseRadius + r * RINGS.ringSpacing;
+        const phase = r * RINGS.ringPhaseStep;
+
+        for (let j = 0; j < RINGS.pointsPerRing; j++) {
+            const theta = (j / RINGS.pointsPerRing) * Math.PI * 2.0 + phase;
+
+            // PERIODIC noise sampling along θ:
+            // circle coords in noise space (u,v), plus ring-index drift & global offsets
+            const c = Math.cos(theta) * RINGS.noiseThetaFreq;
+            const s = Math.sin(theta) * RINGS.noiseThetaFreq;
+
+            const u = c + r * RINGS.noiseRingFreqU + RINGS.noiseOffsetU;
+            const v = s + r * RINGS.noiseRingFreqV + RINGS.noiseOffsetV;
+
+            // two decorrelated samples
+            const nRad = perlin2D(u, v);                  // [-1,1]
+            const nY = perlin2D(u + 123.45, v - 67.89); // [-1,1]
+
+            const radius = ringR
+                + nRad * RINGS.noiseRadialAmp
+                + randNormal(0, RINGS.radialSigma);
+
+            const y = (nY * RINGS.noiseVerticalAmp)
+                + randNormal(0, RINGS.verticalSigma);
+
+            const x = radius * Math.cos(theta);
+            const z = radius * Math.sin(theta);
+
+            positions[idx++] = x;
+            positions[idx++] = y;
+            positions[idx++] = z;
+        }
+    }
+
+    particleGeo = new THREE.BufferGeometry();
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    particleMat = new THREE.PointsMaterial({
+        size: RINGS.sizePx,
+        sizeAttenuation: true,
+        color: RINGS.color,
+        transparent: true,
+        opacity: RINGS.opacity,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+    });
+
+    particleCloud = new THREE.Points(particleGeo, particleMat);
+    particleCloud.rotation.x = THREE.MathUtils.degToRad(-15); // tilt the rings around X axis
+    particleCloud.position.y = 50; // translate the rings up above the skull
+
+    scene.add(particleCloud);
 }
 
-const particleGeo = new THREE.BufferGeometry();
-particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+// Build once (re-run if you tweak RINGS)
+buildRingParticles();
 
-// use a soft circular sprite texture for nicer look (make one 32×32 PNG with white circle + alpha)
-// or skip `map:` to render plain square points
-const particleMat = new THREE.PointsMaterial({
-    size: 3 * window.devicePixelRatio,
-    sizeAttenuation: true,
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.8,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending
-});
-
-const particleCloud = new THREE.Points(particleGeo, particleMat);
-scene.add(particleCloud);
 
 
 
