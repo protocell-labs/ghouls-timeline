@@ -40,6 +40,20 @@ let particleCloud = null;
 let particleGeo = null;
 let particleMat = null;
 
+let particleCloudTilt = 25; // tilt the rings around X axis in degrees
+let particleCloudHeight = 75 // translate the rings up above the skull
+
+let cameraPosition = { // camera position (X - horizontal, Y - height, Z - depth)
+    x: 0,
+    y: -150,
+    z: 250
+}; 
+let cameraTarget = { // look-at point (X - horizontal, Y - height, Z - depth)
+    x: 0,
+    y: 75,
+    z: 0
+}; 
+
 const MAX_COLORS = 32; // for use in quantization shader
 
 const materialOptions = {
@@ -89,7 +103,7 @@ const RINGS = {
 
     // appearance
     sizePx: 1 * window.devicePixelRatio,
-    color: 0x808080,
+    color: 0x0033ff, // 0x808080 - 50% gray, 0x0033ff - EVA HUD blue
     opacity: 0.85
 };
 
@@ -201,8 +215,8 @@ const camera = new THREE.PerspectiveCamera(
     100000 // far clipping plane
 );
 
-camera.position.set(0, -150, 300); // camera position (X, Y - height, Z - depth)
-// change look-at point with controls.target.set(0, -50, 0); after controls are defined
+camera.position.set(cameraPosition.x, cameraPosition.y, cameraPosition.z); // camera position (X, Y - height, Z - depth)
+
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ antialias: false });
@@ -213,13 +227,10 @@ document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-controls.target.set(0, 50, 0); // look-at point
+controls.target.set(cameraTarget.x, cameraTarget.y, cameraTarget.z); // look-at point
 controls.update();
 
 // Lighting
-//const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-//scene.add(hemiLight);
-
 const dirLightA = new THREE.DirectionalLight(0xff0000, 0.8); // red light
 dirLightA.position.set(1, 1, 1);
 const dirLightB = new THREE.DirectionalLight(0x0000ff, 0.4); // blue light
@@ -456,7 +467,7 @@ guiWrap.id = 'gui-container';
 document.body.appendChild(guiWrap);
 
 
-
+// palette GUI
 function makePaletteGUI(defaultKey = 'CGA 8') {
     const wrap = document.createElement('div');
 
@@ -485,7 +496,7 @@ function makePaletteGUI(defaultKey = 'CGA 8') {
     });
 }
 
-
+// material GUI
 function makeMaterialGUI(defaultKey = 'Lambert') {
     const wrap = document.createElement('div');
 
@@ -595,8 +606,8 @@ function buildRingParticles() {
     });
 
     particleCloud = new THREE.Points(particleGeo, particleMat);
-    particleCloud.rotation.x = THREE.MathUtils.degToRad(-15); // tilt the rings around X axis
-    particleCloud.position.y = 50; // translate the rings up above the skull
+    particleCloud.rotation.x = THREE.MathUtils.degToRad(particleCloudTilt); // tilt the rings around X axis
+    particleCloud.position.y = particleCloudHeight; // translate the rings up above the skull
 
     scene.add(particleCloud);
 }
