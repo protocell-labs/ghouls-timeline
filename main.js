@@ -105,7 +105,7 @@ const RINGS = {
 
     // appearance
     sizePx: 1 * window.devicePixelRatio,
-    color: 0x0033ff, // 0x808080 - 50% gray, 0x0033ff - EVA HUD blue
+    color: 0x00ccff, // 0x808080 - 50% gray, 0x0033ff - EVA HUD blue, 0x00ccff - EVA HUD light blue
     opacity: 0.85
 };
 
@@ -129,7 +129,7 @@ const STARFIELD = {
 
   // appearance
   sizePx: 1 * window.devicePixelRatio,
-  color: 0x0033ff,
+  color: 0x00ccff, // 0x00ccff - EVA HUD light blue
   opacity: 0.85,
 
   // transform (optional tilt/shift)
@@ -145,6 +145,14 @@ function randNormal(mean = 0, sigma = 1) {
     let u = 1 - Math.random(), v = 1 - Math.random();
     const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
     return mean + sigma * z;
+}
+
+
+// helper function for calculating random-walk branch length in the starfield
+function branchLength(b, nrOfBranches, branchPoints) {
+  // Example: linearly scale from 50% to 150% of branchPoints
+  const factor = 0.5 + (b / (nrOfBranches - 1)); 
+  return Math.floor(branchPoints * factor);
 }
 
 
@@ -662,12 +670,18 @@ function addStarField() {
     tiltX, offsetY
   } = STARFIELD;
 
-  const totalStars = branchPoints * nrOfBranches + extraStars;
-  const positions = new Float32Array(totalStars * 3);
-  let idx = 0;
-
-  // random walk branches
+  // 1. compute total number of branch stars
+  let totalBranchStars = 0;
   for (let b = 0; b < nrOfBranches; b++) {
+    totalBranchStars += branchLength(b, nrOfBranches, branchPoints);
+  }
+  const totalStars = totalBranchStars + extraStars;
+  const positions = new Float32Array(totalStars * 3);
+
+  // 2. generate branches
+  let idx = 0;
+  for (let b = 0; b < nrOfBranches; b++) {
+    const steps = branchLength(b, nrOfBranches, branchPoints);
     let stepSize = stepSizeInit * Math.pow(stepSizeDecay, b);
     let start_point = new THREE.Vector3(
       (Math.random() * 2 - 1) * startOffset,
@@ -675,11 +689,10 @@ function addStarField() {
       planeZ
     );
 
-    // alternating bias (up vs down)
     const biasUp = (b % 2) * biasStrength / Math.sqrt(b + 1);
     const biasDown = -((b + 1) % 2) * biasStrength / Math.sqrt(b + 1);
 
-    for (let i = 0; i < branchPoints; i++) {
+    for (let i = 0; i < steps; i++) {
       const rand_vec = new THREE.Vector3(
         (Math.random() * 2 - 1) * stepSize,
         (Math.random() * 2 - 1) * stepSize +
@@ -694,13 +707,14 @@ function addStarField() {
     }
   }
 
-  // sprinkle extra random stars
+  // 3. sprinkle extra random stars
   for (let i = 0; i < extraStars; i++) {
     positions[idx++] = (Math.random() - 0.5) * extraSpreadX;
     positions[idx++] = (Math.random() - 0.5) * extraSpreadY;
     positions[idx++] = planeZ;
   }
 
+  // 4. build geometry + material
   const starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
@@ -716,7 +730,6 @@ function addStarField() {
 
   const starField = new THREE.Points(starGeo, starMat);
 
-  // tilt & translate
   starField.rotation.x = tiltX;
   starField.position.y = offsetY;
 

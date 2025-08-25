@@ -190,6 +190,11 @@ const palette_cyan_mono = [
     '#00cccc', '#00ffff', '#aaffff', '#ffffff'
 ];
 
+// ⚫️⚪️ Black & white (2 shades)
+const palette_mono = [
+    '#000000', '#ffffff'
+];
+
 
 // register palette names so we can select them from a menu
 const PALETTES = {
@@ -215,5 +220,6 @@ const PALETTES = {
     'Amber Mono 8': palette_amber_mono,
     'Magenta Mono 8': palette_magenta_mono,
     'Blue Mono 8': palette_blue_mono,
-    'Cyan Mono 8': palette_cyan_mono
+    'Cyan Mono 8': palette_cyan_mono,
+    'Mono 2': palette_mono
 };
