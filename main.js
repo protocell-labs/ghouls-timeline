@@ -32,7 +32,7 @@ let pxFactor = 3; // ↑ bigger = chunkier pixels
 let ditherPixelSize = 300.0; // blue noise grain size
 let ditherStrength = 0.5; // 0.0 (none) to 1.0 (strong)
 
-let bloomStrength = 0.5; // 1.0
+let bloomStrength = 1.0; // 1.0, 0.5
 let bloomRadius = 0.1;
 let bloomThreshold = 0.70;
 
@@ -82,15 +82,17 @@ const noiseTex = new THREE.TextureLoader().load('assets/HDR_L_15.png', (tex) => 
 const RINGS = {
     ringCount: 12,
     pointsPerRing: 4000,
-    baseRadius: 60,
-    ringSpacing: 18,
+    baseRadius: 50,
+    ringSpacing: 18, // uniform spacing distance between rings
+    ringSpacingNonLin: 2.0, // non-linear spacing factor - progressively increases spacing for outer rings
 
     // Gaussian grit
-    radialSigma: 1.2,
-    verticalSigma: 0.8,
+    radialSigma: 2.0, // radial spread of points
+    radialSigmaNonLin: 0.50, // non-linear spread factor - progressively increases spread for outer rings - 0.5
+    verticalSigma: 1.0, // vertical spread of points
 
     // Perlin controls (now periodic along θ via cos/sin)
-    noiseRadialAmp: 6.0,
+    noiseRadialAmp: 5.0, // 6.0
     noiseVerticalAmp: 3.0,
     noiseThetaFreq: 2.75,  // how many “waves” around a ring
     noiseRingFreqU: 0.22,  // how much ring index shifts noise U
@@ -106,6 +108,37 @@ const RINGS = {
     color: 0x0033ff, // 0x808080 - 50% gray, 0x0033ff - EVA HUD blue
     opacity: 0.85
 };
+
+
+// ----------- STARFIELD PARAMETERS -----------
+const STARFIELD = {
+  planeZ: -250,          // z coordinate of the star plane
+
+  // random walk branches
+  nrOfBranches: 50,       // number of random walk branches - 20
+  branchPoints: 4000,     // stars in each branch - 4000
+  stepSizeInit: 10.0,      // initial step size per branch - 5.0
+  stepSizeDecay: 0.95,    // step size shrink factor for each branch
+  startOffset: 50,       // starting XY offset range - 100
+  biasStrength: 0.75,      // vertical bias strength (smearing upward) - 0.50
+
+  // extra stars (uniform random distribution)
+  extraStars: 2500,
+  extraSpreadX: 2000,
+  extraSpreadY: 1000,
+
+  // appearance
+  sizePx: 1 * window.devicePixelRatio,
+  color: 0x0033ff,
+  opacity: 0.85,
+
+  // transform (optional tilt/shift)
+  tiltX: THREE.MathUtils.degToRad(25),
+  offsetY: 250
+};
+
+
+
 
 // Gaussian helper
 function randNormal(mean = 0, sigma = 1) {
@@ -541,8 +574,7 @@ makeMaterialGUI('Lambert'); // init materials GUI
 
 
 
-// ----------- PARTICLE CLOUD -----------
-
+// ----------- RING PARTICLE CLOUD -----------
 
 function buildRingParticles() {
     // dispose old
@@ -558,7 +590,7 @@ function buildRingParticles() {
 
     let idx = 0;
     for (let r = 0; r < RINGS.ringCount; r++) {
-        const ringR = RINGS.baseRadius + r * RINGS.ringSpacing;
+        const ringR = RINGS.baseRadius + r * RINGS.ringSpacing + r * r * RINGS.ringSpacingNonLin;
         const phase = r * RINGS.ringPhaseStep;
 
         for (let j = 0; j < RINGS.pointsPerRing; j++) {
@@ -578,7 +610,7 @@ function buildRingParticles() {
 
             const radius = ringR
                 + nRad * RINGS.noiseRadialAmp
-                + randNormal(0, RINGS.radialSigma);
+                + randNormal(0, RINGS.radialSigma * r * RINGS.radialSigmaNonLin);
 
             const y = (nY * RINGS.noiseVerticalAmp)
                 + randNormal(0, RINGS.verticalSigma);
@@ -617,6 +649,82 @@ buildRingParticles();
 
 
 
+
+// ----------- STAR FIELD PARTICLE CLOUD -----------
+
+function addStarField() {
+  const {
+    planeZ,
+    nrOfBranches, branchPoints,
+    stepSizeInit, stepSizeDecay, startOffset, biasStrength,
+    extraStars, extraSpreadX, extraSpreadY,
+    sizePx, color, opacity,
+    tiltX, offsetY
+  } = STARFIELD;
+
+  const totalStars = branchPoints * nrOfBranches + extraStars;
+  const positions = new Float32Array(totalStars * 3);
+  let idx = 0;
+
+  // random walk branches
+  for (let b = 0; b < nrOfBranches; b++) {
+    let stepSize = stepSizeInit * Math.pow(stepSizeDecay, b);
+    let start_point = new THREE.Vector3(
+      (Math.random() * 2 - 1) * startOffset,
+      (Math.random() * 2 - 1) * startOffset,
+      planeZ
+    );
+
+    // alternating bias (up vs down)
+    const biasUp = (b % 2) * biasStrength / Math.sqrt(b + 1);
+    const biasDown = -((b + 1) % 2) * biasStrength / Math.sqrt(b + 1);
+
+    for (let i = 0; i < branchPoints; i++) {
+      const rand_vec = new THREE.Vector3(
+        (Math.random() * 2 - 1) * stepSize,
+        (Math.random() * 2 - 1) * stepSize +
+          (Math.random() < 0.5 ? biasUp : biasDown),
+        0
+      );
+      start_point.add(rand_vec);
+
+      positions[idx++] = start_point.x;
+      positions[idx++] = start_point.y;
+      positions[idx++] = start_point.z;
+    }
+  }
+
+  // sprinkle extra random stars
+  for (let i = 0; i < extraStars; i++) {
+    positions[idx++] = (Math.random() - 0.5) * extraSpreadX;
+    positions[idx++] = (Math.random() - 0.5) * extraSpreadY;
+    positions[idx++] = planeZ;
+  }
+
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  const starMat = new THREE.PointsMaterial({
+    size: sizePx,
+    sizeAttenuation: true,
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+
+  const starField = new THREE.Points(starGeo, starMat);
+
+  // tilt & translate
+  starField.rotation.x = tiltX;
+  starField.position.y = offsetY;
+
+  scene.add(starField);
+}
+
+
+addStarField();
 
 
 
