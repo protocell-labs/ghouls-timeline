@@ -19,7 +19,7 @@ import { perlin2D } from './perlin.min.js';
 const mouse = { x: 0, y: 0 };          // current mouse position in NDC
 const targetRotation = { x: 0, y: 0 }; // desired model rotation based on mouse
 
-let skull, jaw;
+let skull, jaw, torso;
 let jawOpen = 0;          // smoothed value (0 closed .. 1 open)
 let targetJawOpen = 0;    // current target
 let nextJawEvent = 0;     // time until we change state again
@@ -44,15 +44,15 @@ let particleCloudTilt = 25; // tilt the rings around X axis in degrees
 let particleCloudHeight = 75 // translate the rings up above the skull
 
 let cameraPosition = { // camera position (X - horizontal, Y - height, Z - depth)
-    x: 0,
-    y: -150,
-    z: 250
-}; 
+    x: -100, // 0
+    y: -400, // -150
+    z: 400 // 250
+};
 let cameraTarget = { // look-at point (X - horizontal, Y - height, Z - depth)
-    x: 0,
-    y: 75,
-    z: 0
-}; 
+    x: 0, // 0
+    y: 0, // 75
+    z: 0 // 0
+};
 
 const MAX_COLORS = 32; // for use in quantization shader
 
@@ -112,29 +112,29 @@ const RINGS = {
 
 // ----------- STARFIELD PARAMETERS -----------
 const STARFIELD = {
-  planeZ: -250,          // z coordinate of the star plane
+    planeZ: -250,          // z coordinate of the star plane
 
-  // random walk branches
-  nrOfBranches: 50,       // number of random walk branches - 20
-  branchPoints: 4000,     // stars in each branch - 4000
-  stepSizeInit: 10.0,      // initial step size per branch - 5.0
-  stepSizeDecay: 0.95,    // step size shrink factor for each branch
-  startOffset: 50,       // starting XY offset range - 100
-  biasStrength: 0.75,      // vertical bias strength (smearing upward) - 0.50
+    // random walk branches
+    nrOfBranches: 50,       // number of random walk branches - 20
+    branchPoints: 4000,     // stars in each branch - 4000
+    stepSizeInit: 10.0,      // initial step size per branch - 5.0
+    stepSizeDecay: 0.95,    // step size shrink factor for each branch
+    startOffset: 50,       // starting XY offset range - 100
+    biasStrength: 0.75,      // vertical bias strength (smearing upward) - 0.50
 
-  // extra stars (uniform random distribution)
-  extraStars: 2500,
-  extraSpreadX: 2000,
-  extraSpreadY: 1000,
+    // extra stars (uniform random distribution)
+    extraStars: 2500,
+    extraSpreadX: 2000,
+    extraSpreadY: 1000,
 
-  // appearance
-  sizePx: 1 * window.devicePixelRatio,
-  color: 0x00ccff, // 0x00ccff - EVA HUD light blue
-  opacity: 0.85,
+    // appearance
+    sizePx: 1 * window.devicePixelRatio,
+    color: 0x00ccff, // 0x00ccff - EVA HUD light blue
+    opacity: 0.85,
 
-  // transform (optional tilt/shift)
-  tiltX: THREE.MathUtils.degToRad(25),
-  offsetY: 250
+    // transform (optional tilt/shift)
+    tiltX: THREE.MathUtils.degToRad(25),
+    offsetY: 250
 };
 
 
@@ -150,9 +150,9 @@ function randNormal(mean = 0, sigma = 1) {
 
 // helper function for calculating random-walk branch length in the starfield
 function branchLength(b, nrOfBranches, branchPoints) {
-  // Example: linearly scale from 50% to 150% of branchPoints
-  const factor = 0.5 + (b / (nrOfBranches - 1)); 
-  return Math.floor(branchPoints * factor);
+    // Example: linearly scale from 50% to 150% of branchPoints
+    const factor = 0.5 + (b / (nrOfBranches - 1));
+    return Math.floor(branchPoints * factor);
 }
 
 
@@ -314,37 +314,42 @@ scene.add(head);
 
 (async function loadHeadParts() {
     try {
-        const [skullGltf, jawGltf] = await Promise.all([
+        const [skullGltf, jawGltf, torsoGltf] = await Promise.all([
             loader.loadAsync('assets/skull_model_01_06_skull.glb'),
             loader.loadAsync('assets/skull_model_01_06_jaw.glb'),
+            loader.loadAsync('assets/skull_jaw_torso_01.glb')
         ]);
 
-        // Base halves
         skull = skullGltf.scene;
         jaw = jawGltf.scene;
+        torso = torsoGltf.scene;
 
-        // Apply Normal material (DoubleSide so geometry draws correctly)
-        [skull, jaw].forEach((obj) => {
+        // Apply material
+        [skull, jaw, torso].forEach((obj) => {
             obj.traverse((child) => {
                 if (child.isMesh) {
-                    child.material = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-                    // Optional niceties:
-                    // child.frustumCulled = false;
-                    // child.castShadow = child.receiveShadow = false;
+                    child.material = new THREE.MeshLambertMaterial({
+                        color: 0xffffff,
+                        side: THREE.DoubleSide
+                    });
                 }
             });
         });
 
-        // Add skull and jaw to the head group
+        // Attach jaw under skull
+        skull.add(jaw);
+
+        // Add skull + torso to main head group
         head.add(skull);
-        head.add(jaw);
+        head.add(torso);
 
-        console.log('Head parts loaded: skull + jaw');
-
+        console.log('Head parts loaded: skull + jaw + torso (hierarchy applied)');
     } catch (e) {
         console.error('Error loading head parts:', e);
     }
 })();
+
+
 
 
 
@@ -362,7 +367,7 @@ function updateMaterial() {
             break;
     }
 
-    [skull, jaw].forEach((obj) => {
+    [skull, torso].forEach((obj) => {
         if (obj) {
             obj.traverse((child) => {
                 if (child.isMesh) {
@@ -661,79 +666,79 @@ buildRingParticles();
 // ----------- STAR FIELD PARTICLE CLOUD -----------
 
 function addStarField() {
-  const {
-    planeZ,
-    nrOfBranches, branchPoints,
-    stepSizeInit, stepSizeDecay, startOffset, biasStrength,
-    extraStars, extraSpreadX, extraSpreadY,
-    sizePx, color, opacity,
-    tiltX, offsetY
-  } = STARFIELD;
+    const {
+        planeZ,
+        nrOfBranches, branchPoints,
+        stepSizeInit, stepSizeDecay, startOffset, biasStrength,
+        extraStars, extraSpreadX, extraSpreadY,
+        sizePx, color, opacity,
+        tiltX, offsetY
+    } = STARFIELD;
 
-  // 1. compute total number of branch stars
-  let totalBranchStars = 0;
-  for (let b = 0; b < nrOfBranches; b++) {
-    totalBranchStars += branchLength(b, nrOfBranches, branchPoints);
-  }
-  const totalStars = totalBranchStars + extraStars;
-  const positions = new Float32Array(totalStars * 3);
-
-  // 2. generate branches
-  let idx = 0;
-  for (let b = 0; b < nrOfBranches; b++) {
-    const steps = branchLength(b, nrOfBranches, branchPoints);
-    let stepSize = stepSizeInit * Math.pow(stepSizeDecay, b);
-    let start_point = new THREE.Vector3(
-      (Math.random() * 2 - 1) * startOffset,
-      (Math.random() * 2 - 1) * startOffset,
-      planeZ
-    );
-
-    const biasUp = (b % 2) * biasStrength / Math.sqrt(b + 1);
-    const biasDown = -((b + 1) % 2) * biasStrength / Math.sqrt(b + 1);
-
-    for (let i = 0; i < steps; i++) {
-      const rand_vec = new THREE.Vector3(
-        (Math.random() * 2 - 1) * stepSize,
-        (Math.random() * 2 - 1) * stepSize +
-          (Math.random() < 0.5 ? biasUp : biasDown),
-        0
-      );
-      start_point.add(rand_vec);
-
-      positions[idx++] = start_point.x;
-      positions[idx++] = start_point.y;
-      positions[idx++] = start_point.z;
+    // 1. compute total number of branch stars
+    let totalBranchStars = 0;
+    for (let b = 0; b < nrOfBranches; b++) {
+        totalBranchStars += branchLength(b, nrOfBranches, branchPoints);
     }
-  }
+    const totalStars = totalBranchStars + extraStars;
+    const positions = new Float32Array(totalStars * 3);
 
-  // 3. sprinkle extra random stars
-  for (let i = 0; i < extraStars; i++) {
-    positions[idx++] = (Math.random() - 0.5) * extraSpreadX;
-    positions[idx++] = (Math.random() - 0.5) * extraSpreadY;
-    positions[idx++] = planeZ;
-  }
+    // 2. generate branches
+    let idx = 0;
+    for (let b = 0; b < nrOfBranches; b++) {
+        const steps = branchLength(b, nrOfBranches, branchPoints);
+        let stepSize = stepSizeInit * Math.pow(stepSizeDecay, b);
+        let start_point = new THREE.Vector3(
+            (Math.random() * 2 - 1) * startOffset,
+            (Math.random() * 2 - 1) * startOffset,
+            planeZ
+        );
 
-  // 4. build geometry + material
-  const starGeo = new THREE.BufferGeometry();
-  starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const biasUp = (b % 2) * biasStrength / Math.sqrt(b + 1);
+        const biasDown = -((b + 1) % 2) * biasStrength / Math.sqrt(b + 1);
 
-  const starMat = new THREE.PointsMaterial({
-    size: sizePx,
-    sizeAttenuation: true,
-    color,
-    transparent: true,
-    opacity,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending
-  });
+        for (let i = 0; i < steps; i++) {
+            const rand_vec = new THREE.Vector3(
+                (Math.random() * 2 - 1) * stepSize,
+                (Math.random() * 2 - 1) * stepSize +
+                (Math.random() < 0.5 ? biasUp : biasDown),
+                0
+            );
+            start_point.add(rand_vec);
 
-  const starField = new THREE.Points(starGeo, starMat);
+            positions[idx++] = start_point.x;
+            positions[idx++] = start_point.y;
+            positions[idx++] = start_point.z;
+        }
+    }
 
-  starField.rotation.x = tiltX;
-  starField.position.y = offsetY;
+    // 3. sprinkle extra random stars
+    for (let i = 0; i < extraStars; i++) {
+        positions[idx++] = (Math.random() - 0.5) * extraSpreadX;
+        positions[idx++] = (Math.random() - 0.5) * extraSpreadY;
+        positions[idx++] = planeZ;
+    }
 
-  scene.add(starField);
+    // 4. build geometry + material
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const starMat = new THREE.PointsMaterial({
+        size: sizePx,
+        sizeAttenuation: true,
+        color,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+    });
+
+    const starField = new THREE.Points(starGeo, starMat);
+
+    starField.rotation.x = tiltX;
+    starField.position.y = offsetY;
+
+    scene.add(starField);
 }
 
 
@@ -794,12 +799,16 @@ function animate() {
     const t = clock.getElapsedTime();
     quantizePass.uniforms.uTime.value = t; // advance animated grain
 
+    // ---------- ORIENTATION SPLIT ----------
+    // Keep the container neutral so torso doesn't inherit mouse-follow
+    if (head) head.rotation.set(0, 0, 0);
 
-    // ---------- HEAD ORIENTATION ----------
-    if (head) {
-        const idleX = idle.ampX * Math.sin(t * idle.speedX * Math.PI * 2.0);
-        const idleY = idle.ampY * Math.sin(t * idle.speedY * Math.PI * 2.0 + Math.PI / 3);
+    // Shared idle sway
+    const idleX = idle.ampX * Math.sin(t * idle.speedX * Math.PI * 2.0);
+    const idleY = idle.ampY * Math.sin(t * idle.speedY * Math.PI * 2.0 + Math.PI / 3);
 
+    // ---------- SKULL (+jaw via hierarchy) follows mouse + idle/reset ----------
+    if (skull) {
         let targetX, targetY, lerp;
         if (mouseInWindow) {
             targetX = targetRotation.x + idleX;
@@ -815,16 +824,26 @@ function animate() {
             lerp = resetLerp;
         }
 
-        head.rotation.x += (targetX - head.rotation.x) * lerp;
-        head.rotation.y += (targetY - head.rotation.y) * lerp;
+        skull.rotation.x += (targetX - skull.rotation.x) * lerp;
+        skull.rotation.y += (targetY - skull.rotation.y) * lerp;
     }
 
-    // ---------- JAW ANIMATION ----------
+    // ---------- TORSO: wobble only (no mouse-follow) ----------
+    if (torso) {
+        const torsoLerp = 0.05; // gentle smoothing for torso wobble
+        torso.rotation.x += (idleX - torso.rotation.x) * torsoLerp;
+        torso.rotation.y += (idleY - torso.rotation.y) * torsoLerp;
+    }
+
+
+    // ---------- JAW ANIMATION (random only when mouse inside; closed when outside) ----------
     if (jaw) {
+        // If mouse is outside, force closed and push next event a bit
         if (!mouseInWindow) {
             targetJawOpen = 0;
             nextJawEvent = t + 0.4;
         } else {
+            // Mouse inside: allow random open/close timing
             if (t > nextJawEvent) {
                 if (targetJawOpen === 0) {
                     targetJawOpen = 1; // open
@@ -836,19 +855,22 @@ function animate() {
             }
         }
 
+        // Smooth jaw openness toward target (0..1)
         jawOpen += (targetJawOpen - jawOpen) * 0.05;
+
         const maxOpen = THREE.MathUtils.degToRad(28);
 
-        const openFactor = (mouseInWindow)
-            ? THREE.MathUtils.smoothstep(jawOpen, 0.05, 0.30)
-            : 0.0;
+        // No idle chatter when closed OR when mouse is outside
+        const openFactor = (mouseInWindow) ? THREE.MathUtils.smoothstep(jawOpen, 0.05, 0.30) : 0.0;
         const idleAmp = THREE.MathUtils.degToRad(mouseInWindow ? 0.5 : 0.0) * openFactor;
         const idleSpeed = 2.2;
         const idleOffset = idleAmp * Math.sin(t * idleSpeed * Math.PI * 2.0);
 
+        // Final hinge angle (relative to skull)
         const angle = (jawOpen * maxOpen) + idleOffset;
         jaw.rotation.x = angle;
     }
+
 
     // ---------- PARTICLE ANIMATION ----------
     if (particleCloud) {
