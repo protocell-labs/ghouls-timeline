@@ -592,72 +592,110 @@ makeMaterialGUI('Lambert'); // init materials GUI
 // ----------- RING PARTICLE CLOUD -----------
 
 function buildRingParticles() {
-    // dispose old
-    if (particleCloud) {
-        scene.remove(particleCloud);
-        particleGeo.dispose();
-        particleMat.dispose();
-        particleCloud = null;
-    }
-
     const total = RINGS.ringCount * RINGS.pointsPerRing;
     const positions = new Float32Array(total * 3);
+    const ringIndex = new Float32Array(total);
+    const baseRadiusAttr = new Float32Array(total);
 
     let idx = 0;
     for (let r = 0; r < RINGS.ringCount; r++) {
-        const ringR = RINGS.baseRadius + r * RINGS.ringSpacing + r * r * RINGS.ringSpacingNonLin;
+        const baseR =
+            RINGS.baseRadius +
+            r * RINGS.ringSpacing +
+            r * r * RINGS.ringSpacingNonLin;
+
         const phase = r * RINGS.ringPhaseStep;
 
         for (let j = 0; j < RINGS.pointsPerRing; j++) {
             const theta = (j / RINGS.pointsPerRing) * Math.PI * 2.0 + phase;
 
-            // PERIODIC noise sampling along θ:
-            // circle coords in noise space (u,v), plus ring-index drift & global offsets
-            const c = Math.cos(theta) * RINGS.noiseThetaFreq;
-            const s = Math.sin(theta) * RINGS.noiseThetaFreq;
+            // Gaussian jitter
+            const radialJitter =
+                randNormal(0, RINGS.radialSigma + r * RINGS.radialSigmaNonLin);
+            const verticalJitter = randNormal(0, RINGS.verticalSigma);
 
-            const u = c + r * RINGS.noiseRingFreqU + RINGS.noiseOffsetU;
-            const v = s + r * RINGS.noiseRingFreqV + RINGS.noiseOffsetV;
+            // Perlin noise offsets
+            const u = Math.cos(theta) * RINGS.noiseThetaFreq + r * RINGS.noiseRingFreqU + RINGS.noiseOffsetU;
+            const v = Math.sin(theta) * RINGS.noiseThetaFreq + r * RINGS.noiseRingFreqV + RINGS.noiseOffsetV;
+            const nRadial = perlin2D(u, v) * RINGS.noiseRadialAmp;
+            const nVertical = perlin2D(v, u) * RINGS.noiseVerticalAmp;
 
-            // two decorrelated samples
-            const nRad = perlin2D(u, v);                  // [-1,1]
-            const nY = perlin2D(u + 123.45, v - 67.89); // [-1,1]
-
-            const radius = ringR
-                + nRad * RINGS.noiseRadialAmp
-                + randNormal(0, RINGS.radialSigma * r * RINGS.radialSigmaNonLin);
-
-            const y = (nY * RINGS.noiseVerticalAmp)
-                + randNormal(0, RINGS.verticalSigma);
-
+            const radius = baseR + radialJitter + nRadial;
             const x = radius * Math.cos(theta);
+            const y = verticalJitter + nVertical;
             const z = radius * Math.sin(theta);
 
-            positions[idx++] = x;
-            positions[idx++] = y;
-            positions[idx++] = z;
+            positions[idx * 3 + 0] = x;
+            positions[idx * 3 + 1] = y;
+            positions[idx * 3 + 2] = z;
+
+            baseRadiusAttr[idx] = baseR;
+            ringIndex[idx] = r;
+            idx++;
         }
     }
 
-    particleGeo = new THREE.BufferGeometry();
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute("ringIndex", new THREE.BufferAttribute(ringIndex, 1));
+    geo.setAttribute("baseRadius", new THREE.BufferAttribute(baseRadiusAttr, 1));
 
-    particleMat = new THREE.PointsMaterial({
-        size: RINGS.sizePx,
-        sizeAttenuation: true,
-        color: RINGS.color,
+    const mat = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 },
+            uSize: { value: RINGS.sizePx },
+            uColor: { value: new THREE.Color(RINGS.color) },
+            uOpacity: { value: RINGS.opacity },
+            uWaveSpeed: { value: 2.0 },   // outward speed
+            uWaveAmp: { value: 5.0 },     // amplitude
+        },
         transparent: true,
-        opacity: RINGS.opacity,
         depthWrite: false,
-        blending: THREE.AdditiveBlending
+        blending: THREE.AdditiveBlending,
+        vertexShader: /* glsl */`
+      attribute float ringIndex;
+      attribute float baseRadius;
+      uniform float uTime;
+      uniform float uWaveSpeed;
+      uniform float uWaveAmp;
+      uniform float uSize;
+      varying vec3 vColor;
+      void main() {
+        vec3 pos = position;
+
+        // Compute ripple outward based on base radius
+        float ripple = sin(uTime * uWaveSpeed - ringIndex * 0.3) * uWaveAmp;
+        float len = length(pos.xz);
+        float newR = len + ripple;
+
+        float angle = atan(pos.z, pos.x);
+        pos.x = newR * cos(angle);
+        pos.z = newR * sin(angle);
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        gl_PointSize = uSize;
+        vColor = vec3(1.0);
+      }
+    `,
+        fragmentShader: /* glsl */`
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      void main() {
+        vec2 uv = gl_PointCoord - 0.5;
+        if (dot(uv, uv) > 0.25) discard; // round point shape
+        gl_FragColor = vec4(uColor, uOpacity);
+      }
+    `
     });
 
-    particleCloud = new THREE.Points(particleGeo, particleMat);
-    particleCloud.rotation.x = THREE.MathUtils.degToRad(particleCloudTilt); // tilt the rings around X axis
-    particleCloud.position.y = particleCloudHeight; // translate the rings up above the skull
+    particleCloud = new THREE.Points(geo, mat);
+    particleCloud.rotation.x = THREE.MathUtils.degToRad(particleCloudTilt);
+    particleCloud.position.y = particleCloudHeight;
 
     scene.add(particleCloud);
 }
+
+
 
 // Build once (re-run if you tweak RINGS)
 buildRingParticles();
@@ -877,8 +915,11 @@ function animate() {
 
     // ---------- PARTICLE ANIMATION ----------
     if (particleCloud) {
-        particleCloud.rotation.y += 0.001; // slow spin around vertical axis
+        particleCloud.rotation.y += 0.001;
+        particleCloud.material.uniforms.uTime.value = t;
     }
+
+
 
 
     controls.update();
