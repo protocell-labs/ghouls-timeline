@@ -167,10 +167,17 @@ const palette_green_mono = [
 ];
 
 // 🟡 Amber Monochrome CRT (8 shades)
+// with BMAS color '#f29b30'
 const palette_amber_mono = [
+    '#000000', '#663300', '#ff5c00',
+    '#cc6600', '#f29b30', '#ffff00'
+];
+
+// old Amber Monochrome CRT
+/*const palette_amber_mono = [
     '#000000', '#331900', '#663300', '#ff5c00',
     '#cc6600', '#ffaa55', '#ffd4aa', '#ffffff'
-];
+];*/
 
 // 🟣 Magenta / Pink Monochrome (8 shades)
 const palette_magenta_mono = [

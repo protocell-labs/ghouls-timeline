@@ -40,7 +40,7 @@ let particleCloud = null;
 let particleGeo = null;
 let particleMat = null;
 
-let particleCloudTilt = 25; // tilt the rings around X axis in degrees
+let particleCloudTilt = 0; // tilt the rings around X axis in degrees, 25
 let particleCloudHeight = 75 // translate the rings up above the skull
 
 let cameraPosition = { // camera position (X - horizontal, Y - height, Z - depth)
@@ -80,10 +80,10 @@ const noiseTex = new THREE.TextureLoader().load('assets/HDR_L_15.png', (tex) => 
 
 // ----------- RING PARTICLE PARAMETERS (with Perlin) -----------
 const RINGS = {
-    ringCount: 12,
-    pointsPerRing: 4000,
+    ringCount: 20, // 12
+    pointsPerRing: 2000, // 4000
     baseRadius: 50,
-    ringSpacing: 18, // uniform spacing distance between rings
+    ringSpacing: 25, // uniform spacing distance between rings, 18
     ringSpacingNonLin: 2.0, // non-linear spacing factor - progressively increases spacing for outer rings
 
     // Gaussian grit
@@ -104,9 +104,9 @@ const RINGS = {
     ringPhaseStep: 0.17,   // radians added per ring
 
     // appearance
-    sizePx: 1 * window.devicePixelRatio,
-    color: 0x00ccff, // 0x808080 - 50% gray, 0x0033ff - EVA HUD blue, 0x00ccff - EVA HUD light blue
-    opacity: 0.85
+    sizePx: 3 * window.devicePixelRatio, // 1 * window.devicePixelRatio
+    color: 0xffffff, // 0x808080 - 50% gray, 0x0033ff - EVA HUD blue, 0x00ccff - EVA HUD light blue
+    opacity: 0.85 // 0.85
 };
 
 
@@ -115,26 +115,28 @@ const STARFIELD = {
     planeZ: -250,          // z coordinate of the star plane
 
     // random walk branches
-    nrOfBranches: 50,       // number of random walk branches - 20
-    branchPoints: 4000,     // stars in each branch - 4000
-    stepSizeInit: 10.0,      // initial step size per branch - 5.0
-    stepSizeDecay: 0.95,    // step size shrink factor for each branch
-    startOffset: 50,       // starting XY offset range - 100
-    biasStrength: 0.75,      // vertical bias strength (smearing upward) - 0.50
+    nrOfBranches: 200,       // number of random walk branches - 50
+    branchPoints: 2000,     // stars in each branch - 4000
+    stepSizeInit: 30.0,      // initial step size per branch - 10.0
+    stepSizeDecay: 0.975,    // step size shrink factor for each branch - 0.95, 0.975
+    startOffsetX: 750,       // starting X offset range - 50
+    startOffsetY: 400,       // starting Y offset range - 50
+    biasStrength: 2.0,      // vertical bias strength (smearing upward) - 0.75
 
     // extra stars (uniform random distribution)
-    extraStars: 2500,
-    extraSpreadX: 2000,
-    extraSpreadY: 1000,
+    extraStars: 0, // 2500
+    extraSpreadX: 2500,
+    extraSpreadY: 1500,
 
     // appearance
-    sizePx: 1 * window.devicePixelRatio,
-    color: 0x00ccff, // 0x00ccff - EVA HUD light blue
-    opacity: 0.85,
+    sizePx: 3 * window.devicePixelRatio,
+    color: 0x808080, // 0x00ccff - EVA HUD light blue
+    opacity: 0.5, // 0.85, 0.5
 
     // transform (optional tilt/shift)
-    tiltX: THREE.MathUtils.degToRad(25),
-    offsetY: 250
+    tiltX: THREE.MathUtils.degToRad(45), // 25
+    tiltY: THREE.MathUtils.degToRad(-16),
+    offsetY: 0 // 250
 };
 
 
@@ -669,10 +671,10 @@ function addStarField() {
     const {
         planeZ,
         nrOfBranches, branchPoints,
-        stepSizeInit, stepSizeDecay, startOffset, biasStrength,
+        stepSizeInit, stepSizeDecay, startOffsetX, startOffsetY, biasStrength,
         extraStars, extraSpreadX, extraSpreadY,
         sizePx, color, opacity,
-        tiltX, offsetY
+        tiltX, tiltY, offsetY
     } = STARFIELD;
 
     // 1. compute total number of branch stars
@@ -689,8 +691,8 @@ function addStarField() {
         const steps = branchLength(b, nrOfBranches, branchPoints);
         let stepSize = stepSizeInit * Math.pow(stepSizeDecay, b);
         let start_point = new THREE.Vector3(
-            (Math.random() * 2 - 1) * startOffset,
-            (Math.random() * 2 - 1) * startOffset,
+            (Math.random() * 2 - 1) * startOffsetX,
+            (Math.random() * 2 - 1) * startOffsetY,
             planeZ
         );
 
@@ -736,6 +738,7 @@ function addStarField() {
     const starField = new THREE.Points(starGeo, starMat);
 
     starField.rotation.x = tiltX;
+    starField.rotation.y = tiltY;
     starField.position.y = offsetY;
 
     scene.add(starField);
