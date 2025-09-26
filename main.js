@@ -43,6 +43,11 @@ let particleMat = null;
 let particleCloudTilt = 0; // tilt the rings around X axis in degrees, 25
 let particleCloudHeight = 75 // translate the rings up above the skull
 
+// --- starfield (GPU animated) ---
+let starField = null;
+let starGeo = null;
+let starMat = null;
+
 let cameraPosition = { // camera position (X - horizontal, Y - height, Z - depth)
     x: -100, // 0
     y: -400, // -150
@@ -80,7 +85,7 @@ const noiseTex = new THREE.TextureLoader().load('assets/HDR_L_15.png', (tex) => 
 
 // ----------- RING PARTICLE PARAMETERS (with Perlin) -----------
 const RINGS = {
-    ringCount: 20,
+    ringCount: 20, // 20
     pointsPerRing: 1000, // 2000
     baseRadius: 50,
     ringSpacing: 25,
@@ -109,7 +114,7 @@ const RINGS = {
     ringPhaseStep: 0.17,
 
     // appearance
-    sizePx: 6 * window.devicePixelRatio, // 3 * window.devicePixelRatio
+    sizePx: 5 * window.devicePixelRatio, // 6 * window.devicePixelRatio
     color: 0xffffff,
     opacity: 0.5, // 0.85
 
@@ -127,13 +132,24 @@ const STARFIELD = {
     planeZ: -250,          // z coordinate of the star plane
 
     // random walk branches
-    nrOfBranches: 200,       // number of random walk branches - 50
-    branchPoints: 2000,     // stars in each branch - 4000
-    stepSizeInit: 30.0,      // initial step size per branch - 10.0
+    nrOfBranches: 200,       // number of random walk branches - 200
+    branchPoints: 1500,     // stars in each branch - 3000
+    stepSizeInit: 30.0,      // initial step size per branch - 30.0
     stepSizeDecay: 0.975,    // step size shrink factor for each branch - 0.95, 0.975
-    startOffsetX: 750,       // starting X offset range - 50
-    startOffsetY: 400,       // starting Y offset range - 50
-    biasStrength: 2.0,      // vertical bias strength (smearing upward) - 0.75
+    startOffsetX: 600,       // starting X offset range - 750
+    startOffsetY: 350,       // starting Y offset range - 400
+    biasStrength: 3.0,      // vertical bias strength (smearing upward) - 0.75, 0.2
+
+    // GPU animation controls
+    trailSpeed: 0.15,     // how fast a “lit window” travels along each branch (0..1 steps/sec)
+    trailWidth: 0.5,     // size of the lit window along the branch (0..1)
+    glitchIntensity: 0.85,// 0 = no gating, 1 = heavy gating
+    glitchSegments: 36.0, // angular wedges for gating (XY plane)
+    glitchSpeed: 100.0,     // how fast segments update - 2.0
+    blinkSpeed: 8.0,      // per-star stochastic flicker speed
+    jitterAmp: 0.75,      // subtle per-frame position jitter
+    driftX: 0.0,          // constant plane drift (pixels/sec in world units)
+    driftY: 0.0,
 
     // extra stars (uniform random distribution)
     extraStars: 0, // 2500
@@ -141,14 +157,15 @@ const STARFIELD = {
     extraSpreadY: 1500,
 
     // appearance
-    sizePx: 3 * window.devicePixelRatio,
+    sizePx: 4 * window.devicePixelRatio, // 3 * window.devicePixelRatio
     color: 0x808080, // 0x00ccff - EVA HUD light blue
-    opacity: 0.5, // 0.85, 0.5
+    opacity: 0.5, // 0.85, 0.5, 0.75
 
     // transform (optional tilt/shift)
     tiltX: THREE.MathUtils.degToRad(45), // 25
     tiltY: THREE.MathUtils.degToRad(-16),
-    offsetY: 0 // 250
+    offsetX: -100, //
+    offsetY: -425 // 250
 };
 
 
@@ -828,75 +845,210 @@ function addStarField() {
         stepSizeInit, stepSizeDecay, startOffsetX, startOffsetY, biasStrength,
         extraStars, extraSpreadX, extraSpreadY,
         sizePx, color, opacity,
-        tiltX, tiltY, offsetY
+        tiltX, tiltY, offsetX, offsetY,
+
+        // NEW animation controls
+        trailSpeed, trailWidth,
+        glitchIntensity, glitchSegments, glitchSpeed,
+        blinkSpeed, jitterAmp,
+        driftX, driftY
     } = STARFIELD;
 
-    // 1. compute total number of branch stars
+    // 1) compute total number of branch stars (variable branch lengths)
+    let perBranchCounts = new Array(nrOfBranches);
     let totalBranchStars = 0;
     for (let b = 0; b < nrOfBranches; b++) {
-        totalBranchStars += branchLength(b, nrOfBranches, branchPoints);
+        const steps = branchLength(b, nrOfBranches, branchPoints);
+        perBranchCounts[b] = steps;
+        totalBranchStars += steps;
     }
     const totalStars = totalBranchStars + extraStars;
-    const positions = new Float32Array(totalStars * 3);
 
-    // 2. generate branches
+    // 2) allocate attributes
+    const positions = new Float32Array(totalStars * 3);
+    const aBranch = new Float32Array(totalStars); // branch id
+    const aT = new Float32Array(totalStars); // 0..1 along branch
+    const aSeed = new Float32Array(totalStars); // per-point seed (for flicker/jitter)
+
+    // 3) fill branches (same biased random walk as before)
     let idx = 0;
     for (let b = 0; b < nrOfBranches; b++) {
-        const steps = branchLength(b, nrOfBranches, branchPoints);
+        const steps = perBranchCounts[b];
         let stepSize = stepSizeInit * Math.pow(stepSizeDecay, b);
-        let start_point = new THREE.Vector3(
+        let p = new THREE.Vector3(
             (Math.random() * 2 - 1) * startOffsetX,
             (Math.random() * 2 - 1) * startOffsetY,
             planeZ
         );
 
-        const biasUp = (b % 2) * biasStrength / Math.sqrt(b + 1);
-        const biasDown = -((b + 1) % 2) * biasStrength / Math.sqrt(b + 1);
+        //const biasUp = (b % 2) * biasStrength / Math.sqrt(b + 1);
+        //const biasDown = -((b + 1) % 2) * biasStrength / Math.sqrt(b + 1);
+        const bias = STARFIELD.biasStrength / Math.sqrt(b + 1);
 
         for (let i = 0; i < steps; i++) {
-            const rand_vec = new THREE.Vector3(
+            const rv = new THREE.Vector3(
                 (Math.random() * 2 - 1) * stepSize,
-                (Math.random() * 2 - 1) * stepSize +
-                (Math.random() < 0.5 ? biasUp : biasDown),
+                (Math.random() * 2 - 1) * stepSize + bias,
                 0
             );
-            start_point.add(rand_vec);
+            p.add(rv);
 
-            positions[idx++] = start_point.x;
-            positions[idx++] = start_point.y;
-            positions[idx++] = start_point.z;
+            positions[3 * idx + 0] = p.x;
+            positions[3 * idx + 1] = p.y;
+            positions[3 * idx + 2] = p.z;
+
+            aBranch[idx] = b;
+            aT[idx] = steps > 1 ? (i / (steps - 1)) : 0.0;   // normalized position along branch
+            aSeed[idx] = Math.random() * 1000.0;                // random seed
+            idx++;
         }
     }
 
-    // 3. sprinkle extra random stars
+    // 4) sprinkle extra random stars (treated as branch = -1 → optional gating)
     for (let i = 0; i < extraStars; i++) {
-        positions[idx++] = (Math.random() - 0.5) * extraSpreadX;
-        positions[idx++] = (Math.random() - 0.5) * extraSpreadY;
-        positions[idx++] = planeZ;
+        positions[3 * idx + 0] = (Math.random() - 0.5) * extraSpreadX;
+        positions[3 * idx + 1] = (Math.random() - 0.5) * extraSpreadY;
+        positions[3 * idx + 2] = planeZ;
+
+        aBranch[idx] = -1.0;        // specials
+        aT[idx] = Math.random();
+        aSeed[idx] = Math.random() * 1000.0;
+        idx++;
     }
 
-    // 4. build geometry + material
-    const starGeo = new THREE.BufferGeometry();
+    // 5) geometry + shader material
+    starGeo = new THREE.BufferGeometry();
     starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    starGeo.setAttribute('aBranch', new THREE.BufferAttribute(aBranch, 1));
+    starGeo.setAttribute('aT', new THREE.BufferAttribute(aT, 1));
+    starGeo.setAttribute('aSeed', new THREE.BufferAttribute(aSeed, 1));
 
-    const starMat = new THREE.PointsMaterial({
-        size: sizePx,
-        sizeAttenuation: true,
-        color,
+    starMat = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0.0 },
+
+            uSize: { value: sizePx },
+            uColor: { value: new THREE.Color(color) },
+            uOpacity: { value: opacity },
+
+            // glitching & sweep
+            uTrailSpeed: { value: trailSpeed },
+            uTrailWidth: { value: trailWidth },
+            uGlitchIntensity: { value: glitchIntensity },
+            uGlitchSegments: { value: glitchSegments },
+            uGlitchSpeed: { value: glitchSpeed },
+            uBlinkSpeed: { value: blinkSpeed },
+
+            // small motion
+            uJitterAmp: { value: jitterAmp },
+            uDrift: { value: new THREE.Vector2(driftX, driftY) }
+        },
         transparent: true,
-        opacity,
         depthWrite: false,
-        blending: THREE.AdditiveBlending
+        blending: THREE.AdditiveBlending,
+        vertexShader: /* glsl */`
+        attribute float aBranch;   // branch id (-1 for extra stars)
+        attribute float aT;        // 0..1 position along branch
+        attribute float aSeed;     // per-point random seed
+
+        uniform float uTime;
+        uniform float uSize;
+        uniform float uJitterAmp;
+
+        // trail controls
+        uniform float uTrailSpeed;   // how fast the head travels
+        uniform float uTrailWidth;   // trail length as fraction of [0..1] (0.05..0.3 works well)
+
+        // (optional drift kept but set to 0 via uniforms)
+        uniform vec2  uDrift;
+
+        varying float vVis;   // visibility/tail fade to fragment
+
+        float hash(float x){ return fract(sin(x*12.9898)*43758.5453); }
+
+        void main() {
+        vec3 pos = position;
+
+        // (optional) plane drift – set uniforms to 0 to disable
+        pos.x += uDrift.x * uTime;
+        pos.y += uDrift.y * uTime;
+
+        // tiny per-frame jitter (sparkle)
+        float jx = (hash(aSeed + floor(uTime*37.0)) - 0.5) * uJitterAmp;
+        float jy = (hash(aSeed + floor(uTime*29.0) + 7.0) - 0.5) * uJitterAmp;
+        pos.x += jx;
+        pos.y += jy;
+
+        // ---- moving HEAD/TAIL along branch (non-wrapping look) ----
+        // Head advances in [0,1) with a per-branch phase.
+        float branchPhase = hash(aBranch + 13.37);
+        float head = fract(uTime * uTrailSpeed + branchPhase);
+
+        // forward distance from this point to the head, wrapping on [0,1)
+        float forward = head - aT;
+        if (forward < 0.0) forward += 1.0; // wrap so 0 = head, 1 = just behind tail
+
+        // inside trail if forward ∈ [0, uTrailWidth]
+        float inside = 1.0 - step(uTrailWidth, forward);
+
+        // soft fade near the tail (so points "decay" as they leave the head)
+        float tailFade = 1.0 - smoothstep(uTrailWidth*0.85, uTrailWidth, forward);
+
+        vVis = inside * tailFade;
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+        gl_PointSize = uSize;
+        }
+
+    `,
+        fragmentShader: /* glsl */`
+        precision mediump float;
+
+        uniform vec3  uColor;
+        uniform float uOpacity;
+        uniform float uGlitchSegments;
+        uniform float uGlitchSpeed;
+        uniform float uGlitchIntensity;
+
+        varying float vVis;
+
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+
+        void main() {
+        vec2 uv = gl_PointCoord - 0.5;
+        if (dot(uv,uv) > 0.25) discard;
+
+        // angular segmentation for glitch gating (optional stylistic effect)
+        float ang = atan(uv.y, uv.x) + 3.14159265;
+        float seg = floor( ang / (6.2831853 / max(1.0, uGlitchSegments)) );
+
+        float gate = hash(vec2(seg, floor(uGlitchSpeed * vVis)));
+        float mask = step(gate, mix(vVis, 1.0, 1.0 - uGlitchIntensity));
+
+        float alpha = uOpacity * vVis * mask;
+        if (alpha <= 0.0) discard;
+
+        gl_FragColor = vec4(uColor, alpha);
+        }
+
+    `
     });
 
-    const starField = new THREE.Points(starGeo, starMat);
+    if (starField) {
+        scene.remove(starField);
+        starGeo.dispose();
+        starMat.dispose();
+    }
 
+    starField = new THREE.Points(starGeo, starMat);
     starField.rotation.x = tiltX;
     starField.rotation.y = tiltY;
+    starField.position.x = offsetX;
     starField.position.y = offsetY;
 
     scene.add(starField);
 }
+
 
 
 addStarField();
@@ -1035,6 +1187,10 @@ function animate() {
         particleCloud.material.uniforms.uTime.value = t;
     }
 
+    // ---------- STARFIELD ANIMATION ----------
+    if (starMat) {
+        starMat.uniforms.uTime.value = t;
+    }
 
 
 
