@@ -80,34 +80,46 @@ const noiseTex = new THREE.TextureLoader().load('assets/HDR_L_15.png', (tex) => 
 
 // ----------- RING PARTICLE PARAMETERS (with Perlin) -----------
 const RINGS = {
-    ringCount: 20, // 12
-    pointsPerRing: 2000, // 4000
+    ringCount: 20,
+    pointsPerRing: 1000, // 2000
     baseRadius: 50,
-    ringSpacing: 25, // uniform spacing distance between rings, 18
-    ringSpacingNonLin: 2.0, // non-linear spacing factor - progressively increases spacing for outer rings
+    ringSpacing: 25,
+    ringSpacingNonLin: 1.2, // 1.2
 
     // Gaussian grit
-    radialSigma: 2.0, // radial spread of points
-    radialSigmaNonLin: 0.50, // non-linear spread factor - progressively increases spread for outer rings - 0.5
-    verticalSigma: 1.0, // vertical spread of points
+    radialSigma: 1.0, // 2.0
+    radialSigmaNonLin: 1.1, // will be multiplied by idx in shader - 1.1
+    verticalSigma: 1.0, // 1.0
+    verticalSigmaNonLin: 1.0, // NEW: extra fuzz scaling with idx - 0.35
 
-    // Perlin controls (now periodic along θ via cos/sin)
-    noiseRadialAmp: 5.0, // 6.0
-    noiseVerticalAmp: 3.0,
-    noiseThetaFreq: 2.75,  // how many “waves” around a ring
-    noiseRingFreqU: 0.22,  // how much ring index shifts noise U
-    noiseRingFreqV: 0.31,  // how much ring index shifts noise V
-    noiseOffsetU: Math.random() * 1000.0,
-    noiseOffsetV: Math.random() * 1000.0,
+    // Perlin controls
+    noiseRadialAmp: 5.0, // how strong distortions are radially - 5.0
+    noiseVerticalAmp: 5.0, // how strong distortions are vertically - 3.0
+    noiseThetaFreq: 1.0, // how detailed distortions are around the circle - 2.75
+    noiseRingFreqU: 0.22, // whether rings share the same distortions or gradually drift - 0.22
+    noiseRingFreqV: 0.31, // whether rings share the same distortions or gradually drift - 0.31
+    noiseOffsetU: Math.random() * 1000.0, // random “starting point” in the noise space, avoids repetition
+    noiseOffsetV: Math.random() * 1000.0, // random “starting point” in the noise space, avoids repetition
 
-    // extra: per-ring angular phase to avoid alignment
-    ringPhaseStep: 0.17,   // radians added per ring
+    // global time-based drift (noise-space units per second)
+    noiseDriftU: 0.5,   // drift along the U axis of the noise field - 0.05
+    noiseDriftV: 0.3,   // drift along the V axis of the noise field - 0.03
+
+    // phase
+    ringPhaseStep: 0.17,
 
     // appearance
-    sizePx: 3 * window.devicePixelRatio, // 1 * window.devicePixelRatio
-    color: 0xffffff, // 0x808080 - 50% gray, 0x0033ff - EVA HUD blue, 0x00ccff - EVA HUD light blue
-    opacity: 0.85 // 0.85
+    sizePx: 6 * window.devicePixelRatio, // 3 * window.devicePixelRatio
+    color: 0xffffff,
+    opacity: 0.5, // 0.85
+
+    // glitch / birth
+    birthWidth: 1.5, // 2.0
+    segments: 40.0,
+    glitchSpeed: 100.0, // 3.0
+    glitchIntensity: 0.85
 };
+
 
 
 // ----------- STARFIELD PARAMETERS -----------
@@ -595,50 +607,22 @@ function buildRingParticles() {
     const total = RINGS.ringCount * RINGS.pointsPerRing;
     const positions = new Float32Array(total * 3);
     const ringIndex = new Float32Array(total);
-    const baseRadiusAttr = new Float32Array(total);
 
     let idx = 0;
     for (let r = 0; r < RINGS.ringCount; r++) {
-        const baseR =
-            RINGS.baseRadius +
-            r * RINGS.ringSpacing +
-            r * r * RINGS.ringSpacingNonLin;
-
-        const phase = r * RINGS.ringPhaseStep;
-
         for (let j = 0; j < RINGS.pointsPerRing; j++) {
-            const theta = (j / RINGS.pointsPerRing) * Math.PI * 2.0 + phase;
-
-            // Gaussian jitter
-            const radialJitter =
-                randNormal(0, RINGS.radialSigma + r * RINGS.radialSigmaNonLin);
-            const verticalJitter = randNormal(0, RINGS.verticalSigma);
-
-            // Perlin noise offsets
-            const u = Math.cos(theta) * RINGS.noiseThetaFreq + r * RINGS.noiseRingFreqU + RINGS.noiseOffsetU;
-            const v = Math.sin(theta) * RINGS.noiseThetaFreq + r * RINGS.noiseRingFreqV + RINGS.noiseOffsetV;
-            const nRadial = perlin2D(u, v) * RINGS.noiseRadialAmp;
-            const nVertical = perlin2D(v, u) * RINGS.noiseVerticalAmp;
-
-            const radius = baseR + radialJitter + nRadial;
-            const x = radius * Math.cos(theta);
-            const y = verticalJitter + nVertical;
-            const z = radius * Math.sin(theta);
-
-            positions[idx * 3 + 0] = x;
-            positions[idx * 3 + 1] = y;
-            positions[idx * 3 + 2] = z;
-
-            baseRadiusAttr[idx] = baseR;
+            const theta = (j / RINGS.pointsPerRing) * Math.PI * 2.0;
+            positions[idx * 3 + 0] = Math.cos(theta); // unit circle
+            positions[idx * 3 + 1] = 0.0;
+            positions[idx * 3 + 2] = Math.sin(theta);
             ringIndex[idx] = r;
             idx++;
         }
     }
 
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute("ringIndex", new THREE.BufferAttribute(ringIndex, 1));
-    geo.setAttribute("baseRadius", new THREE.BufferAttribute(baseRadiusAttr, 1));
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('ringIndex', new THREE.BufferAttribute(ringIndex, 1));
 
     const mat = new THREE.ShaderMaterial({
         uniforms: {
@@ -646,55 +630,187 @@ function buildRingParticles() {
             uSize: { value: RINGS.sizePx },
             uColor: { value: new THREE.Color(RINGS.color) },
             uOpacity: { value: RINGS.opacity },
-            uWaveSpeed: { value: 2.0 },   // outward speed
-            uWaveAmp: { value: 5.0 },     // amplitude
+
+            // motion
+            uBaseRadius: { value: RINGS.baseRadius },
+            uSpacing: { value: RINGS.ringSpacing },
+            uSpacingNonLin: { value: RINGS.ringSpacingNonLin },
+            uRingCount: { value: RINGS.ringCount },
+            uSpeed: { value: 10.0 },
+
+            // Gaussian grit
+            uRadialSigma: { value: RINGS.radialSigma },
+            uRadialSigmaNonLin: { value: RINGS.radialSigmaNonLin },
+            uVerticalSigma: { value: RINGS.verticalSigma },
+            uVerticalSigmaNonLin: { value: RINGS.verticalSigmaNonLin },
+
+            // Perlin noise
+            uNoiseRadialAmp: { value: RINGS.noiseRadialAmp },
+            uNoiseVerticalAmp: { value: RINGS.noiseVerticalAmp },
+            uNoiseThetaFreq: { value: RINGS.noiseThetaFreq },
+            uNoiseRingFreqU: { value: RINGS.noiseRingFreqU },
+            uNoiseRingFreqV: { value: RINGS.noiseRingFreqV },
+            uNoiseOffsetU: { value: RINGS.noiseOffsetU },
+            uNoiseOffsetV: { value: RINGS.noiseOffsetV },
+            uNoiseDriftU: { value: RINGS.noiseDriftU },
+            uNoiseDriftV: { value: RINGS.noiseDriftV },
+
+            // phase
+            uRingPhaseStep: { value: RINGS.ringPhaseStep },
+
+            // glitch
+            uBirthWidth: { value: RINGS.birthWidth },
+            uSegments: { value: RINGS.segments },
+            uGlitchSpeed: { value: RINGS.glitchSpeed },
+            uGlitchIntensity: { value: RINGS.glitchIntensity }
         },
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         vertexShader: /* glsl */`
       attribute float ringIndex;
-      attribute float baseRadius;
+
       uniform float uTime;
-      uniform float uWaveSpeed;
-      uniform float uWaveAmp;
       uniform float uSize;
-      varying vec3 vColor;
-      void main() {
-        vec3 pos = position;
 
-        // Compute ripple outward based on base radius
-        float ripple = sin(uTime * uWaveSpeed - ringIndex * 0.3) * uWaveAmp;
-        float len = length(pos.xz);
-        float newR = len + ripple;
+      uniform float uBaseRadius;
+      uniform float uSpacing;
+      uniform float uSpacingNonLin;
+      uniform float uRingCount;
+      uniform float uSpeed;
 
-        float angle = atan(pos.z, pos.x);
-        pos.x = newR * cos(angle);
-        pos.z = newR * sin(angle);
+      uniform float uRadialSigma;
+      uniform float uRadialSigmaNonLin;
+      uniform float uVerticalSigma;
+      uniform float uVerticalSigmaNonLin;
 
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+      uniform float uNoiseRadialAmp;
+      uniform float uNoiseVerticalAmp;
+      uniform float uNoiseThetaFreq;
+      uniform float uNoiseRingFreqU;
+      uniform float uNoiseRingFreqV;
+      uniform float uNoiseOffsetU;
+      uniform float uNoiseOffsetV;
+      uniform float uNoiseDriftU;
+      uniform float uNoiseDriftV;
+
+      uniform float uRingPhaseStep;
+      uniform float uBirthWidth;
+
+      varying float vBirth;
+      varying float vAng;
+
+      // --- Simplex noise (GLSL1, 2D) ---
+      vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
+      vec2 mod289(vec2 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
+      vec3 permute(vec3 x){ return mod289(((x*34.0)+1.0)*x); }
+      float snoise(vec2 v){
+        const vec4 C = vec4(0.211324865405187,0.366025403784439,
+                            -0.577350269189626,0.024390243902439);
+        vec2 i  = floor(v + dot(v, C.yy));
+        vec2 x0 = v - i + dot(i, C.xx);
+        vec2 i1 = (x0.x > x0.y) ? vec2(1.0,0.0) : vec2(0.0,1.0);
+        vec4 x12 = x0.xyxy + C.xxzz; x12.xy -= i1;
+        i = mod289(i);
+        vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
+                               + i.x + vec3(0.0, i1.x, 1.0));
+        vec3 m = max(0.5 - vec3(dot(x0,x0),dot(x12.xy,x12.xy),
+                                dot(x12.zw,x12.zw)), 0.0);
+        m = m*m; m = m*m;
+        vec3 x = 2.0*fract(p*C.www)-1.0;
+        vec3 h = abs(x)-0.5;
+        vec3 ox = floor(x+0.5);
+        vec3 a0 = x-ox;
+        m *= 1.79284291400159 - 0.85373472095314*(a0*a0+h*h);
+        vec3 g;
+        g.x  = a0.x*x0.x  + h.x*x0.y;
+        g.yz = a0.yz*x12.xz + h.yz*x12.yw;
+        return 130.0*dot(m,g);
+      }
+      float perlin2D(vec2 p){ return snoise(p); }
+
+      float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+      float gaussJitter(vec2 p){ return (hash(p)+hash(p+19.19)-1.0); }
+
+      void main(){
+        float phase = uTime * (uSpeed / max(uSpacing,1e-5));
+        float idx = mod(ringIndex + phase, uRingCount);
+
+        // birth factor
+        float d0 = min(idx, uRingCount - idx);
+        vBirth = smoothstep(0.0, max(0.0001,uBirthWidth), d0);
+
+        // spacing
+        float radial = uBaseRadius + idx*uSpacing + pow(idx,1.0+uSpacingNonLin);
+
+        // angle
+        float ang = atan(position.z, position.x) + ringIndex*uRingPhaseStep;
+        vAng = ang;
+
+        // Gaussian grit with non-linear scaling
+        float rSigma = uRadialSigma + idx*uRadialSigmaNonLin;
+        radial += gaussJitter(vec2(ang,idx)) * rSigma;
+
+        float vSigma = uVerticalSigma + idx*uVerticalSigmaNonLin;
+        float y = gaussJitter(vec2(idx,ang)) * vSigma;
+
+        // Periodic Perlin (θ mapped to cos/sin) with ring drift + offsets + TIME DRIFT
+        vec2 uv = vec2(
+            cos(ang) * uNoiseThetaFreq + idx * uNoiseRingFreqU + uNoiseOffsetU + uTime * uNoiseDriftU,
+            sin(ang) * uNoiseThetaFreq + idx * uNoiseRingFreqV + uNoiseOffsetV + uTime * uNoiseDriftV
+        );
+
+        radial += perlin2D(uv)             * uNoiseRadialAmp;
+        y      += perlin2D(uv.yx + 12.345) * uNoiseVerticalAmp;
+
+        vec3 pos;
+        pos.x = radial*cos(ang);
+        pos.z = radial*sin(ang);
+        pos.y = y;
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos,1.0);
         gl_PointSize = uSize;
-        vColor = vec3(1.0);
       }
     `,
         fragmentShader: /* glsl */`
       uniform vec3 uColor;
       uniform float uOpacity;
-      void main() {
+      uniform float uSegments;
+      uniform float uGlitchSpeed;
+      uniform float uGlitchIntensity;
+
+      varying float vBirth;
+      varying float vAng;
+
+      float hash(vec2 p){ return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453); }
+
+      void main(){
         vec2 uv = gl_PointCoord - 0.5;
-        if (dot(uv, uv) > 0.25) discard; // round point shape
-        gl_FragColor = vec4(uColor, uOpacity);
+        if(dot(uv,uv)>0.25) discard;
+
+        // glitch segmentation
+        float seg = floor((vAng+3.14159265)/(6.2831853/max(1.0,uSegments)));
+        float gate = hash(vec2(seg, floor(uGlitchSpeed*vBirth)));
+        float mask = step(gate, mix(vBirth,1.0,1.0-uGlitchIntensity));
+
+        float alpha = uOpacity*mask;
+        if(alpha<=0.0) discard;
+
+        gl_FragColor = vec4(uColor, alpha);
       }
     `
     });
 
+    if (particleCloud) {
+        scene.remove(particleCloud);
+        particleCloud.geometry.dispose();
+        particleCloud.material.dispose();
+    }
     particleCloud = new THREE.Points(geo, mat);
     particleCloud.rotation.x = THREE.MathUtils.degToRad(particleCloudTilt);
     particleCloud.position.y = particleCloudHeight;
-
     scene.add(particleCloud);
 }
-
 
 
 // Build once (re-run if you tweak RINGS)
@@ -915,9 +1031,10 @@ function animate() {
 
     // ---------- PARTICLE ANIMATION ----------
     if (particleCloud) {
-        particleCloud.rotation.y += 0.001;
+        particleCloud.rotation.y += 0.001; // keep gentle rotation
         particleCloud.material.uniforms.uTime.value = t;
     }
+
 
 
 
