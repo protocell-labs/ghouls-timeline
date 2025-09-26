@@ -4,7 +4,7 @@
 It renders a 3D skull with jaw animation, procedural particle rings, a biased random-walk starfield, bloom → pixelation → palette quantization with blue-noise dithering — all in real-time.
 
 <p align="center">
-  <img src="assets/skullshot_922963.png" width="100%" />
+  <img src="assets/skullshot_206734.png" width="100%" />
 </p>
 
 [Run the artwork live](https://protocell-labs.github.io/ghouls-timeline/) 💀📺
