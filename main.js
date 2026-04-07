@@ -53,8 +53,9 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(cameraPosition.x, cameraPosition.y, cameraPosition.z); // camera position (X, Y - height, Z - depth)
 
 
-// Renderer
+// Renderer — render at native resolution so pxFactor works in physical pixels
 const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
@@ -119,14 +120,14 @@ window.addEventListener('resize', () => {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
 
+    renderer.setPixelRatio(window.devicePixelRatio); // may change between monitors
     renderer.setSize(w, h);
 
-    // bloom composer + pass
-    bloomComposer.setSize(w, h);
-    bloomPass.setSize(w, h); // helps some versions/drivers
-
-    quantizePass.uniforms.screenSize.value.set(w, h);
-
+    // Use actual drawing buffer size for composer + shader uniforms
+    const buf = renderer.getDrawingBufferSize(new THREE.Vector2());
+    bloomComposer.setSize(buf.x, buf.y);
+    bloomPass.setSize(buf.x, buf.y);
+    quantizePass.uniforms.screenSize.value.copy(buf);
 });
 
 

@@ -1,6 +1,6 @@
 import { PALETTES } from './palettes.js';
 import { setPalette } from './postprocessing.js';
-import { setMaterialType } from './skull.js';
+import { setMaterialType, setSkullGlitchEnabled } from './skull.js';
 import { updateTagColors } from './tags.js';
 
 export function initGUI(quantizePass) {
@@ -72,7 +72,79 @@ export function initGUI(quantizePass) {
         });
     }
 
+    // Dither GUI
+    function makeDitherGUI() {
+        const wrap = document.createElement('div');
+
+        // Toggle
+        const toggleLabel = document.createElement('label');
+        toggleLabel.style.display = 'flex';
+        toggleLabel.style.alignItems = 'center';
+        toggleLabel.style.gap = '6px';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        toggleLabel.appendChild(checkbox);
+        toggleLabel.appendChild(document.createTextNode('DITHER'));
+        wrap.appendChild(toggleLabel);
+
+        let savedStrength = quantizePass.uniforms.ditherStrength.value;
+
+        checkbox.addEventListener('change', () => {
+            if (checkbox.checked) {
+                quantizePass.uniforms.ditherStrength.value = savedStrength;
+            } else {
+                savedStrength = quantizePass.uniforms.ditherStrength.value;
+                quantizePass.uniforms.ditherStrength.value = 0.0;
+            }
+        });
+
+        // Pixel size
+        const pxLabel = document.createElement('label');
+        pxLabel.textContent = 'PX SIZE';
+        wrap.appendChild(pxLabel);
+
+        const pxInput = document.createElement('input');
+        pxInput.type = 'number';
+        pxInput.min = '1';
+        pxInput.max = '20';
+        pxInput.step = '1';
+        pxInput.value = String(quantizePass.uniforms.pxFactor.value);
+        pxInput.style.cssText = 'width:60px;padding:4px 6px;border-radius:4px;border:1px solid #444;background:#111;color:#eee;font:12px/1.2 system-ui,sans-serif;';
+        wrap.appendChild(pxInput);
+
+        pxInput.addEventListener('input', () => {
+            const val = parseFloat(pxInput.value);
+            if (val >= 1 && val <= 20) {
+                quantizePass.uniforms.pxFactor.value = val;
+            }
+        });
+
+        guiWrap.appendChild(wrap);
+    }
+
+    // Glitch GUI
+    function makeGlitchGUI() {
+        const wrap = document.createElement('div');
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.style.gap = '6px';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        checkbox.addEventListener('change', () => {
+            setSkullGlitchEnabled(checkbox.checked);
+        });
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode('GLITCH'));
+        wrap.appendChild(label);
+        guiWrap.appendChild(wrap);
+    }
+
     // Init palettes GUI - sets default palette at random
     makePaletteGUI(Object.keys(PALETTES)[Math.floor(Math.random() * Object.keys(PALETTES).length)]);
     makeMaterialGUI('Lambert');
+    makeDitherGUI();
+    makeGlitchGUI();
 }

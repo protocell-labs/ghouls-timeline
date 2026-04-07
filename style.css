@@ -49,6 +49,7 @@ canvas {
 #tag-container {
     --tag-color: rgba(200, 200, 200, 0.7);
     --tag-color-dim: rgba(200, 200, 200, 0.4);
+    --tag-bg: #000000;
     position: fixed;
     top: 0;
     left: 0;
@@ -64,7 +65,7 @@ canvas {
     font-family: monospace;
     image-rendering: pixelated;
     border: 1px solid var(--tag-color);
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--tag-bg);
     padding: 6px 10px;
 }
 

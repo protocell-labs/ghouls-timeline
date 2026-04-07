@@ -117,11 +117,14 @@ const QuantizeDitherShader = {
 
 
 export function initPostProcessing(renderer, scene, camera) {
+    // Use actual drawing buffer size (accounts for devicePixelRatio)
+    const buf = renderer.getDrawingBufferSize(new THREE.Vector2());
+
     const bloomComposer = new EffectComposer(renderer);
     const scenePass = new RenderPass(scene, camera);
 
     const bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        buf,
         1.0,   // strength
         0.1,   // radius
         0.70   // threshold
@@ -130,9 +133,12 @@ export function initPostProcessing(renderer, scene, camera) {
     bloomComposer.addPass(scenePass);
     bloomComposer.addPass(bloomPass);
 
+    // Set composer size to match actual buffer
+    bloomComposer.setSize(buf.x, buf.y);
+
     const quantizePass = new ShaderPass(QuantizeDitherShader);
     quantizePass.renderToScreen = true;
-    quantizePass.uniforms.screenSize.value.set(window.innerWidth, window.innerHeight);
+    quantizePass.uniforms.screenSize.value.copy(buf);
 
     bloomComposer.addPass(quantizePass);
 

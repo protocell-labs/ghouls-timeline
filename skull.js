@@ -122,15 +122,12 @@ export async function loadHeadParts() {
         jaw = jawGltf.scene;
         torso = torsoGltf.scene;
 
-        // Apply material
+        // Apply material with glitch shader
+        const mat = createMaterial();
         [skull, jaw, torso].forEach((obj) => {
             obj.traverse((child) => {
                 if (child.isMesh) {
-                    child.material = new THREE.MeshLambertMaterial({
-                        color: 0xffffff,
-                        side: THREE.DoubleSide,
-                        flatShading: true
-                    });
+                    child.material = mat;
                 }
             });
         });
@@ -210,10 +207,167 @@ export function getShoulderPosition() {
 }
 
 
+// --- Vertex glitch effect ---
+
+// Shared uniforms — all glitched materials reference the same objects
+const glitchUniforms = {
+    uGlitchAmount:    { value: 0.0 },
+    uGlitchSliceDir:  { value: new THREE.Vector3(0.707, 0.707, 0.0) },
+    uGlitchSlicePos:  { value: 0.0 },
+    uGlitchStretch:   { value: new THREE.Vector3(1, 0, 0) },
+    uGlitchTime:      { value: 0.0 },
+    uGlitchBandWidth: { value: 15.0 },
+    uGlitchStretchMag: { value: 25.0 },
+    uGlitchNoiseMag:  { value: 8.0 }
+};
+
+let glitchEnabled = true;
+let nextGlitchTime = 3.0; // first glitch after 3s
+let glitchStartTime = -1;
+const GLITCH_DURATION = 0.35;     // seconds
+const GLITCH_MIN_INTERVAL = 5.0;
+const GLITCH_MAX_INTERVAL = 10.0;
+
+// Inject glitch vertex displacement into a Three.js built-in material
+function applyGlitchShader(material) {
+    material.onBeforeCompile = (shader) => {
+        // Add our uniforms
+        shader.uniforms.uGlitchAmount = glitchUniforms.uGlitchAmount;
+        shader.uniforms.uGlitchSliceDir = glitchUniforms.uGlitchSliceDir;
+        shader.uniforms.uGlitchSlicePos = glitchUniforms.uGlitchSlicePos;
+        shader.uniforms.uGlitchStretch = glitchUniforms.uGlitchStretch;
+        shader.uniforms.uGlitchTime = glitchUniforms.uGlitchTime;
+        shader.uniforms.uGlitchBandWidth = glitchUniforms.uGlitchBandWidth;
+        shader.uniforms.uGlitchStretchMag = glitchUniforms.uGlitchStretchMag;
+        shader.uniforms.uGlitchNoiseMag = glitchUniforms.uGlitchNoiseMag;
+
+        // Prepend uniform declarations to vertex shader
+        shader.vertexShader =
+            'uniform float uGlitchAmount;\n' +
+            'uniform vec3  uGlitchSliceDir;\n' +
+            'uniform float uGlitchSlicePos;\n' +
+            'uniform vec3  uGlitchStretch;\n' +
+            'uniform float uGlitchTime;\n' +
+            'uniform float uGlitchBandWidth;\n' +
+            'uniform float uGlitchStretchMag;\n' +
+            'uniform float uGlitchNoiseMag;\n' +
+            shader.vertexShader;
+
+        // Inject displacement after #include <begin_vertex>
+        // (at this point `transformed` holds the local vertex position)
+        shader.vertexShader = shader.vertexShader.replace(
+            '#include <begin_vertex>',
+            /* glsl */`
+            #include <begin_vertex>
+
+            // --- Diagonal slice glitch ---
+            if (uGlitchAmount > 0.001) {
+                // Distance from the slice plane
+                float sliceDist = dot(transformed, uGlitchSliceDir) - uGlitchSlicePos;
+
+                // Soft band: vertices within uGlitchBandWidth of the slice are affected
+                float sliceMask = 1.0 - smoothstep(0.0, uGlitchBandWidth, abs(sliceDist));
+
+                // Noise field — cheap procedural noise from vertex position + time
+                float nx = sin(transformed.x * 0.8 + uGlitchTime * 12.0)
+                         * cos(transformed.y * 1.1 + uGlitchTime * 9.0);
+                float ny = sin(transformed.y * 0.9 + uGlitchTime * 11.0)
+                         * cos(transformed.z * 0.7 + uGlitchTime * 8.0);
+                float nz = sin(transformed.z * 1.0 + uGlitchTime * 10.0)
+                         * cos(transformed.x * 0.6 + uGlitchTime * 7.0);
+
+                // Stretch along slice direction
+                vec3 stretchDisp = uGlitchStretch * sliceMask * uGlitchAmount * uGlitchStretchMag;
+
+                // Noise displacement
+                vec3 noiseDisp = vec3(nx, ny, nz) * sliceMask * uGlitchAmount * uGlitchNoiseMag;
+
+                transformed += stretchDisp + noiseDisp;
+            }
+            `
+        );
+    };
+}
+
+function triggerGlitch() {
+    // Random diagonal slice direction
+    const angle = Math.random() * Math.PI;
+    const tilt = (Math.random() - 0.5) * 0.6;
+    glitchUniforms.uGlitchSliceDir.value.set(
+        Math.cos(angle),
+        Math.sin(angle),
+        tilt
+    ).normalize();
+
+    // Slice position: random offset through the model
+    glitchUniforms.uGlitchSlicePos.value = (Math.random() - 0.5) * 60;
+
+    // Stretch direction: perpendicular-ish to slice, with some randomness
+    glitchUniforms.uGlitchStretch.value.set(
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2
+    ).normalize();
+
+    // Randomize magnitudes
+    glitchUniforms.uGlitchBandWidth.value = 10.0 + Math.random() * 20.0;   // 10-30
+    glitchUniforms.uGlitchStretchMag.value = 15.0 + Math.random() * 35.0;  // 15-50
+    glitchUniforms.uGlitchNoiseMag.value = 5.0 + Math.random() * 10.0;     // 5-15
+}
+
+function updateGlitch(t) {
+    glitchUniforms.uGlitchTime.value = t;
+
+    if (!glitchEnabled) {
+        glitchUniforms.uGlitchAmount.value = 0;
+        return;
+    }
+
+    if (glitchStartTime < 0) {
+        // Not currently glitching — check if it's time
+        if (t > nextGlitchTime) {
+            glitchStartTime = t;
+            triggerGlitch();
+        }
+        glitchUniforms.uGlitchAmount.value = 0;
+    } else {
+        // Currently glitching
+        const elapsed = t - glitchStartTime;
+        if (elapsed > GLITCH_DURATION) {
+            // Glitch ended
+            glitchStartTime = -1;
+            glitchUniforms.uGlitchAmount.value = 0;
+            // Schedule next glitch
+            nextGlitchTime = t + GLITCH_MIN_INTERVAL +
+                Math.random() * (GLITCH_MAX_INTERVAL - GLITCH_MIN_INTERVAL);
+        } else {
+            // Envelope: fast attack, brief hold, fast decay
+            const progress = elapsed / GLITCH_DURATION;
+            let envelope;
+            if (progress < 0.15) {
+                envelope = progress / 0.15; // attack
+            } else if (progress < 0.7) {
+                envelope = 1.0; // hold
+            } else {
+                envelope = 1.0 - (progress - 0.7) / 0.3; // decay
+            }
+            glitchUniforms.uGlitchAmount.value = envelope;
+        }
+    }
+}
+
+export function setSkullGlitchEnabled(enabled) {
+    glitchEnabled = enabled;
+    if (!enabled) {
+        glitchUniforms.uGlitchAmount.value = 0;
+        glitchStartTime = -1;
+    }
+}
+
+
 // --- Material management ---
 
-// Traverse skull + torso meshes and swap their material.
-export function updateMaterial() {
+function createMaterial() {
     let mat;
     switch (materialOptions.type) {
         case 'Lambert':
@@ -224,6 +378,13 @@ export function updateMaterial() {
             mat = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
             break;
     }
+    applyGlitchShader(mat);
+    return mat;
+}
+
+// Traverse skull + torso meshes and swap their material.
+export function updateMaterial() {
+    const mat = createMaterial();
 
     [skull, torso].forEach((obj) => {
         if (obj) {
@@ -245,6 +406,9 @@ export function setMaterialType(type) {
 // --- Per-frame animation ---
 
 export function animateSkull(t) {
+    // Update vertex glitch effect
+    updateGlitch(t);
+
     // Keep the container neutral so torso doesn't inherit mouse-follow
     head.rotation.set(0, 0, 0);
 
