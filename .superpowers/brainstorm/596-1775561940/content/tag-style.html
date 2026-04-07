@@ -1,0 +1,74 @@
+<h2>HUD Tag Styling — What Fits the PS1 Vibe?</h2>
+<p class="subtitle">These would be 2D overlays rendered on top of the pixelated/dithered scene, pointing at 3D elements. Click the one that feels right.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0a0a0a; padding:32px 24px; font-family:monospace; position:relative; min-height:120px;">
+      <!-- Tag example -->
+      <div style="position:absolute; top:24px; left:32px;">
+        <div style="border:1px solid rgba(200,200,200,0.4); background:rgba(0,0,0,0.6); padding:6px 10px; font-size:11px; color:#ccc; letter-spacing:1px;">
+          SPECIMEN_01<br>
+          <span style="color:#888; font-size:9px;">EST. 1347 — UNKNOWN ORIGIN</span>
+        </div>
+        <div style="width:1px; height:30px; background:rgba(200,200,200,0.3); margin-left:20px;"></div>
+        <div style="width:6px; height:6px; border:1px solid rgba(200,200,200,0.4); margin-left:17px;"></div>
+      </div>
+      <!-- Second tag -->
+      <div style="position:absolute; top:20px; right:32px;">
+        <div style="border:1px solid rgba(200,200,200,0.4); background:rgba(0,0,0,0.6); padding:6px 10px; font-size:11px; color:#ccc; letter-spacing:1px; text-align:right;">
+          RING_SYS<br>
+          <span style="color:#888; font-size:9px;">CYCLE 0847 — ACTIVE</span>
+        </div>
+      </div>
+      <div style="position:absolute; bottom:12px; left:32px; font-size:8px; color:#555; letter-spacing:2px;">MINIMAL BOX + LINE CONNECTOR</div>
+    </div>
+    <div class="card-body">
+      <h3>A — Minimal Technical</h3>
+      <p>Thin bordered boxes with monospace text, connected to scene elements by a simple line + marker. Like a military targeting system or museum specimen label. <strong>Quiet, clinical.</strong></p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0a0a0a; padding:32px 24px; font-family:monospace; position:relative; min-height:120px;">
+      <!-- Tag example - PS1 dialog box style -->
+      <div style="position:absolute; top:20px; left:24px; right:24px;">
+        <div style="background:#1a1a2a; border:2px solid #445; padding:8px 12px; font-size:12px; color:#aab; image-rendering:pixelated;">
+          <div style="color:#dde; margin-bottom:4px; font-size:10px; letter-spacing:2px; border-bottom:1px solid #334; padding-bottom:4px;">&#9654; GHOUL_01</div>
+          <div style="font-size:11px; line-height:1.5; color:#889;">They found the first one<br>buried beneath the church.<br><span style="color:#556;">1347.winter" — parish records</span></div>
+        </div>
+      </div>
+      <div style="position:absolute; bottom:12px; left:32px; font-size:8px; color:#555; letter-spacing:2px;">PS1 DIALOG BOX STYLE</div>
+    </div>
+    <div class="card-body">
+      <h3>B — PS1 Dialog Box</h3>
+      <p>Styled after actual PS1 game dialog/menu boxes — solid dark background, pixel border, small header with indicator arrow, body text below. Like reading item descriptions in Resident Evil or Final Fantasy. <strong>Familiar, narrative-focused.</strong></p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0a0a0a; padding:32px 24px; font-family:monospace; position:relative; min-height:120px;">
+      <!-- Bare text style -->
+      <div style="position:absolute; top:24px; left:32px;">
+        <div style="font-size:12px; color:rgba(200,200,200,0.7); letter-spacing:1px; text-shadow:1px 1px 0 rgba(0,0,0,0.8);">
+          SPECIMEN_01
+        </div>
+        <div style="font-size:9px; color:rgba(150,150,150,0.5); letter-spacing:1px; margin-top:2px; text-shadow:1px 1px 0 rgba(0,0,0,0.8);">
+          EST. 1347
+        </div>
+      </div>
+      <div style="position:absolute; top:30px; right:32px; text-align:right;">
+        <div style="font-size:10px; color:rgba(180,180,180,0.6); letter-spacing:2px; text-shadow:1px 1px 0 rgba(0,0,0,0.8);">
+          THEY FOUND THE FIRST ONE
+        </div>
+        <div style="font-size:10px; color:rgba(140,140,140,0.4); letter-spacing:2px; margin-top:2px; text-shadow:1px 1px 0 rgba(0,0,0,0.8);">
+          BURIED BENEATH THE CHURCH
+        </div>
+      </div>
+      <div style="position:absolute; bottom:12px; left:32px; font-size:8px; color:#555; letter-spacing:2px;">RAW TEXT — NO FRAME</div>
+    </div>
+    <div class="card-body">
+      <h3>C — Bare Text</h3>
+      <p>No boxes, no borders — just raw monospace text floating over the scene with a subtle shadow for readability. Minimal, ghostly, like subtitles or watermarks. <strong>Atmospheric, unobtrusive.</strong></p>
+    </div>
+  </div>
+</div>

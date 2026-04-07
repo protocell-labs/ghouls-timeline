@@ -44,3 +44,50 @@ canvas {
 #gui-container select:focus {
     border-color: #888;
 }
+
+/* --- HUD Tags --- */
+#tag-container {
+    --tag-color: rgba(200, 200, 200, 0.7);
+    --tag-color-dim: rgba(200, 200, 200, 0.4);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 6;
+    overflow: hidden;
+}
+
+.tag-box {
+    position: absolute;
+    font-family: monospace;
+    image-rendering: pixelated;
+    border: 1px solid var(--tag-color);
+    background: rgba(0, 0, 0, 0.6);
+    padding: 6px 10px;
+}
+
+.tag-title {
+    font-size: 11px;
+    color: var(--tag-color);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.tag-subtitle {
+    font-size: 9px;
+    color: var(--tag-color);
+    opacity: 0.6;
+    letter-spacing: 1px;
+    margin-top: 2px;
+    white-space: nowrap;
+}
+
+.tag-marker {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border: 1px solid var(--tag-color);
+}

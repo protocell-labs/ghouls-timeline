@@ -202,9 +202,57 @@ const palette_mono = [
     '#000000', '#ffffff'
 ];
 
+// 🌫️ Silent Hill — foggy, muted, unsettling
+const palette_silent_hill = [
+    '#1a1a1a', // near-black
+    '#3d3d3d', // dark gray
+    '#6b6b6b', // medium gray
+    '#8c7b6b', // warm gray-brown
+    '#5c6b5c', // muted olive
+    '#6b7b8c', // washed-out blue
+    '#8c8c7b', // pale khaki
+    '#b3a89c'  // foggy beige
+];
+
+// 🧟 Resident Evil — dark, moody, cold with warm accents
+const palette_resident_evil = [
+    '#0a0a0a', // deep black
+    '#1a1a2a', // blue-black
+    '#3d2a2a', // dark blood
+    '#5c3a2a', // dried rust
+    '#4a4a5a', // cold gray
+    '#7a6a5a', // warm gray
+    '#8c2a1a', // crimson
+    '#c4a882'  // amber highlight
+];
+
+// 🏎️ Ridge Racer — bold, limited, high-contrast
+const palette_ridge_racer = [
+    '#0a0a1a', // night sky
+    '#1a3a5a', // racing blue
+    '#2a6a8c', // sky cyan
+    '#4a4a4a', // asphalt gray
+    '#8c5a2a', // sunset orange
+    '#cc7a2a', // bright orange
+    '#2a8c4a', // racing green
+    '#d4d4d4'  // headlight white
+];
+
+// 🎮 PS1 Boot — Sony startup screen palette
+const palette_ps1_boot = [
+    '#000000', // black
+    '#1a1a1a', // dark gray
+    '#4a4a4a', // medium gray
+    '#8a8a8a', // light gray
+    '#e42528', // PlayStation red
+    '#2151a1', // PlayStation blue
+    '#f5c518', // PlayStation yellow
+    '#ffffff'  // white
+];
+
 
 // register palette names so we can select them from a menu
-const PALETTES = {
+export const PALETTES = {
     'CGA 8': palette_cga8,
     'VGA 16': palette_vga16,
 
@@ -228,5 +276,10 @@ const PALETTES = {
     'Magenta Mono 8': palette_magenta_mono,
     'Blue Mono 8': palette_blue_mono,
     'Cyan Mono 8': palette_cyan_mono,
-    'Mono 2': palette_mono
+    'Mono 2': palette_mono,
+
+    'Silent Hill': palette_silent_hill,
+    'Resident Evil': palette_resident_evil,
+    'Ridge Racer': palette_ridge_racer,
+    'PS1 Boot': palette_ps1_boot
 };
