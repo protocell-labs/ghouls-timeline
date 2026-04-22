@@ -29,6 +29,8 @@ canvas {
     padding: 8px 10px;
     background: var(--tag-bg);
     border: 1px solid var(--tag-color);
+    /* Nudge native controls (dropdown popup, scrollbars) toward dark defaults */
+    color-scheme: dark;
 }
 
 /* Shared label style */
@@ -50,9 +52,42 @@ canvas {
     font: 12px/1.2 'BMAS_Pixel_Console', monospace;
     outline: none;
     margin-bottom: 10px;
+    /* System accent for native form-control highlights (where supported) */
+    accent-color: var(--tag-color);
+    /* Firefox scrollbar styling inside the dropdown popup */
+    scrollbar-color: var(--tag-color) var(--tag-bg);
+    scrollbar-width: thin;
 }
 #gui-container select:focus {
     border-color: var(--tag-color);
+}
+
+/* Dropdown option colors (Chromium respects these; Firefox partially) */
+#gui-container select option {
+    background: var(--tag-bg);
+    color: var(--tag-color);
+    font: 12px/1.2 'BMAS_Pixel_Console', monospace;
+}
+#gui-container select option:checked,
+#gui-container select option:hover {
+    background: var(--tag-color);
+    color: var(--tag-bg);
+}
+
+/* Custom scrollbars — WebKit (Chrome/Edge/Safari). Scoped to the dropdown. */
+#gui-container select::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+#gui-container select::-webkit-scrollbar-track {
+    background: var(--tag-bg);
+}
+#gui-container select::-webkit-scrollbar-thumb {
+    background: var(--tag-color);
+    border: 1px solid var(--tag-bg);
+}
+#gui-container select::-webkit-scrollbar-corner {
+    background: var(--tag-bg);
 }
 
 /* Number input */

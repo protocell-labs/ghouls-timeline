@@ -13,7 +13,7 @@ const QuantizeDitherShader = {
         paletteSize: { value: 0 },
 
         screenSize: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-        pxFactor: { value: 3 },
+        pxFactor: { value: 2 },
         ditherStrength: { value: 0.5 },
         uTime: { value: 0.0 }
     },
