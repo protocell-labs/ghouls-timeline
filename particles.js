@@ -35,6 +35,11 @@ const RINGS = {
     color: 0xffffff,
     opacity: 0.5, // 0.85
 
+    // size oscillation (anchored radial wave — phase driven by post-shift idx, so pattern stays put while particles flow through it)
+    sizeOscAmp: 0.5,                   // amplitude as fraction of sizePx (0.5 → size varies from 0.5x to 1.5x)
+    sizeOscFreq: 0.3,                  // cycles per second
+    sizePhaseStep: (2.0 * Math.PI) / 15.0, // radians of phase offset per ring slot — default = one full wave across the stack (ringCount = 20)
+
     // birth
     birthWidth: 1.5, // 2.0
 
@@ -115,7 +120,12 @@ export function buildRingParticles() {
 
             // birth gating
             uSegments: { value: RINGS.segments },
-            uGlitchSpeed: { value: RINGS.glitchSpeed }
+            uGlitchSpeed: { value: RINGS.glitchSpeed },
+
+            // size oscillation
+            uSizeOscAmp: { value: RINGS.sizeOscAmp },
+            uSizeOscFreq: { value: RINGS.sizeOscFreq },
+            uSizePhaseStep: { value: RINGS.sizePhaseStep }
         },
         transparent: true,
         depthWrite: false,
@@ -149,6 +159,10 @@ export function buildRingParticles() {
 
       uniform float uRingPhaseStep;
       uniform float uBirthWidth;
+
+      uniform float uSizeOscAmp;
+      uniform float uSizeOscFreq;
+      uniform float uSizePhaseStep;
 
       varying float vBirth;
       varying float vAng;
@@ -224,7 +238,10 @@ export function buildRingParticles() {
         pos.y = y;
 
         gl_Position = projectionMatrix * modelViewMatrix * vec4(pos,1.0);
-        gl_PointSize = uSize;
+
+        // Anchored radial size wave — phase uses post-shift idx so the pattern stays put in space while particles flow through it
+        float sizeOsc = 1.0 + uSizeOscAmp * sin(6.28318530718 * uSizeOscFreq * uTime + idx * uSizePhaseStep);
+        gl_PointSize = uSize * sizeOsc;
       }
     `,
         fragmentShader: /* glsl */`
