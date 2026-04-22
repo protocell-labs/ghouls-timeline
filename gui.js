@@ -1,6 +1,6 @@
 import { PALETTES } from './palettes.js';
 import { setPalette } from './postprocessing.js';
-import { setMaterialType, setSkullGlitchEnabled } from './skull.js';
+import { setMaterialType, setSkullGlitchEnabled, setDitherPalette, setDitherSurfacePx } from './skull.js';
 import { updateTagColors } from './tags.js';
 
 export function initGUI(quantizePass) {
@@ -30,17 +30,21 @@ export function initGUI(quantizePass) {
         // append into main container
         guiWrap.appendChild(wrap);
 
+        const applyPalette = (hex) => {
+            setPalette(quantizePass, hex);
+            updateTagColors(hex);
+            setDitherPalette(hex);
+        };
+
         // apply initial palette
-        setPalette(quantizePass, PALETTES[select.value]);
-        updateTagColors(PALETTES[select.value]);
+        applyPalette(PALETTES[select.value]);
 
         select.addEventListener('change', () => {
-            setPalette(quantizePass, PALETTES[select.value]);
-            updateTagColors(PALETTES[select.value]);
+            applyPalette(PALETTES[select.value]);
         });
     }
 
-    // Material GUI
+    // Material GUI — returns the select so the caller can wire change listeners
     function makeMaterialGUI(defaultKey = 'Lambert') {
         const wrap = document.createElement('div');
 
@@ -49,7 +53,7 @@ export function initGUI(quantizePass) {
         wrap.appendChild(label);
 
         const select = document.createElement('select');
-        const materialTypes = ['Normal', 'Lambert'];
+        const materialTypes = ['Normal', 'Lambert', 'Lambert Dithered'];
 
         materialTypes.forEach((name) => {
             const opt = document.createElement('option');
@@ -70,6 +74,37 @@ export function initGUI(quantizePass) {
         select.addEventListener('change', () => {
             setMaterialType(select.value);
         });
+
+        return select;
+    }
+
+    // Surface PX GUI (world-units per Bayer cell, for Lambert Dithered) — returns the wrap for show/hide
+    function makeSurfacePxGUI(initialValue = 2.0) {
+        const wrap = document.createElement('div');
+
+        const label = document.createElement('label');
+        label.textContent = 'SURFACE PX';
+        wrap.appendChild(label);
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0.5';
+        input.max = '20';
+        input.step = '0.1';
+        input.value = String(initialValue);
+        wrap.appendChild(input);
+
+        setDitherSurfacePx(initialValue);
+
+        input.addEventListener('input', () => {
+            const val = parseFloat(input.value);
+            if (!isNaN(val) && val >= 0.5 && val <= 20) {
+                setDitherSurfacePx(val);
+            }
+        });
+
+        guiWrap.appendChild(wrap);
+        return wrap;
     }
 
     // Dither GUI
@@ -143,7 +178,16 @@ export function initGUI(quantizePass) {
 
     // Init palettes GUI - sets default palette at random
     makePaletteGUI(Object.keys(PALETTES)[Math.floor(Math.random() * Object.keys(PALETTES).length)]);
-    makeMaterialGUI('Lambert');
+
+    // Material + surface-px pair. SURFACE PX is only relevant for 'Lambert Dithered'.
+    const matSelect = makeMaterialGUI('Lambert');
+    const surfacePxWrap = makeSurfacePxGUI(2.0);
+    const updateSurfacePxVisibility = () => {
+        surfacePxWrap.style.display = (matSelect.value === 'Lambert Dithered') ? 'block' : 'none';
+    };
+    matSelect.addEventListener('change', updateSurfacePxVisibility);
+    updateSurfacePxVisibility();
+
     makeDitherGUI();
     makeGlitchGUI();
 }
