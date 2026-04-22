@@ -1,6 +1,6 @@
 import { PALETTES } from './palettes.js';
 import { setPalette } from './postprocessing.js';
-import { setMaterialType, setSkullGlitchEnabled, setDitherPalette, setDitherSurfacePx } from './skull.js';
+import { setMaterialType, setSkullGlitchEnabled, setDitherPalette, setDitherSurfacePx, setDitherUvDensity } from './skull.js';
 import { updateTagColors } from './tags.js';
 
 export function initGUI(quantizePass) {
@@ -53,7 +53,7 @@ export function initGUI(quantizePass) {
         wrap.appendChild(label);
 
         const select = document.createElement('select');
-        const materialTypes = ['Normal', 'Lambert', 'Lambert Dithered'];
+        const materialTypes = ['Normal', 'Lambert', 'Lambert Dithered', 'Lambert UV Dithered'];
 
         materialTypes.forEach((name) => {
             const opt = document.createElement('option');
@@ -100,6 +100,35 @@ export function initGUI(quantizePass) {
             const val = parseFloat(input.value);
             if (!isNaN(val) && val >= 0.5 && val <= 20) {
                 setDitherSurfacePx(val);
+            }
+        });
+
+        guiWrap.appendChild(wrap);
+        return wrap;
+    }
+
+    // UV Density GUI (Bayer cells per UV unit, for Lambert UV Dithered) — returns the wrap for show/hide
+    function makeUvDensityGUI(initialValue = 32) {
+        const wrap = document.createElement('div');
+
+        const label = document.createElement('label');
+        label.textContent = 'UV DENSITY';
+        wrap.appendChild(label);
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '1';
+        input.max = '256';
+        input.step = '1';
+        input.value = String(initialValue);
+        wrap.appendChild(input);
+
+        setDitherUvDensity(initialValue);
+
+        input.addEventListener('input', () => {
+            const val = parseFloat(input.value);
+            if (!isNaN(val) && val >= 1 && val <= 256) {
+                setDitherUvDensity(val);
             }
         });
 
@@ -179,14 +208,16 @@ export function initGUI(quantizePass) {
     // Init palettes GUI - sets default palette at random
     makePaletteGUI(Object.keys(PALETTES)[Math.floor(Math.random() * Object.keys(PALETTES).length)]);
 
-    // Material + surface-px pair. SURFACE PX is only relevant for 'Lambert Dithered'.
+    // Material + dither-size controls. Each control is tied to one material variant.
     const matSelect = makeMaterialGUI('Lambert');
     const surfacePxWrap = makeSurfacePxGUI(2.0);
-    const updateSurfacePxVisibility = () => {
+    const uvDensityWrap = makeUvDensityGUI(32);
+    const updateDitherControlsVisibility = () => {
         surfacePxWrap.style.display = (matSelect.value === 'Lambert Dithered') ? 'block' : 'none';
+        uvDensityWrap.style.display = (matSelect.value === 'Lambert UV Dithered') ? 'block' : 'none';
     };
-    matSelect.addEventListener('change', updateSurfacePxVisibility);
-    updateSurfacePxVisibility();
+    matSelect.addEventListener('change', updateDitherControlsVisibility);
+    updateDitherControlsVisibility();
 
     makeDitherGUI();
     makeGlitchGUI();

@@ -295,7 +295,8 @@ function injectGlitch(shader) {
 const ditherUniforms = {
     palette: { value: new Array(MAX_COLORS).fill(new THREE.Vector3(0, 0, 0)) },
     paletteSize: { value: 0 },
-    uSurfacePxWorld: { value: 2.0 }
+    uSurfacePxWorld: { value: 2.0 }, // world-space cell size (Lambert Dithered)
+    uUvDensity:      { value: 32.0 } // UV-space cells per UV unit (Lambert UV Dithered)
 };
 
 export function setDitherPalette(hexArray) {
@@ -311,6 +312,10 @@ export function setDitherPalette(hexArray) {
 
 export function setDitherSurfacePx(v) {
     ditherUniforms.uSurfacePxWorld.value = v;
+}
+
+export function setDitherUvDensity(v) {
+    ditherUniforms.uUvDensity.value = v;
 }
 
 // Inject palette quantization + Bayer dither into a Three.js built-in material shader.
@@ -360,6 +365,51 @@ function injectDither(shader) {
             else                                        surfUv = vSurfWorldPos.yz;
 
             vec2 cell = floor(surfUv / max(uSurfacePxWorld, 0.0001));
+            float bayer01 = bayer4x4(cell);
+            gl_FragColor.rgb = palettePick(gl_FragColor.rgb, bayer01, 1.0);
+        }
+        `
+    );
+}
+
+
+// Inject palette quantization + Bayer dither using UV-space coords.
+// Pattern follows the mesh's UV layout — truest "PS1 baked texture" feel, but only as
+// good as the GLB's UVs (stretched/overlapping UVs will produce uneven or broken patterns).
+function injectDitherUV(shader) {
+    // Share the palette uniforms with the world-space variant
+    shader.uniforms.palette = ditherUniforms.palette;
+    shader.uniforms.paletteSize = ditherUniforms.paletteSize;
+    shader.uniforms.uUvDensity = ditherUniforms.uUvDensity;
+
+    // Declare our own UV varying — independent of Three.js's conditional <uv_pars_*> plumbing.
+    // The `uv` attribute is prefix-declared unconditionally by Three.js r138, so we can read it.
+    shader.vertexShader =
+        'varying vec2 vSurfUv;\n' +
+        shader.vertexShader;
+
+    shader.vertexShader = shader.vertexShader.replace(
+        '#include <project_vertex>',
+        /* glsl */`
+        #include <project_vertex>
+        vSurfUv = uv;
+        `
+    );
+
+    shader.fragmentShader =
+        `varying vec2 vSurfUv;
+        uniform vec3 palette[${MAX_COLORS}];
+        uniform int  paletteSize;
+        uniform float uUvDensity;
+        ${PALETTE_DITHER_GLSL}
+        ` + shader.fragmentShader;
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <dithering_fragment>',
+        /* glsl */`
+        #include <dithering_fragment>
+        {
+            vec2 cell = floor(vSurfUv * uUvDensity);
             float bayer01 = bayer4x4(cell);
             gl_FragColor.rgb = palettePick(gl_FragColor.rgb, bayer01, 1.0);
         }
@@ -447,11 +497,14 @@ export function setSkullGlitchEnabled(enabled) {
 
 function createMaterial() {
     let mat;
-    const wantsDither = (materialOptions.type === 'Lambert Dithered');
+    const type = materialOptions.type;
+    const wantsDitherWorld = (type === 'Lambert Dithered');
+    const wantsDitherUV = (type === 'Lambert UV Dithered');
 
-    switch (materialOptions.type) {
+    switch (type) {
         case 'Lambert':
         case 'Lambert Dithered':
+        case 'Lambert UV Dithered':
             // flatShading intentionally omitted — MeshLambertMaterial (r138) doesn't support it
             mat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
             break;
@@ -464,15 +517,18 @@ function createMaterial() {
     // onBeforeCompile is a single slot — compose glitch + (optional) dither into one callback
     mat.onBeforeCompile = (shader) => {
         injectGlitch(shader);
-        if (wantsDither) injectDither(shader);
+        if (wantsDitherWorld) injectDither(shader);
+        else if (wantsDitherUV) injectDitherUV(shader);
     };
 
-    // Force a distinct program cache entry for the dithered variant — Three.js's default
-    // cache key uses onBeforeCompile.toString(), which is identical between Lambert and
-    // Lambert Dithered (the `wantsDither` branch is a closure variable, not in the source).
-    // Without this, switching material reuses the first-compiled program and our
-    // dither injection never runs.
-    mat.customProgramCacheKey = () => (wantsDither ? 'lambert-dithered' : 'lambert-glitch');
+    // Force distinct program cache entries per variant. Three.js's default cache key uses
+    // onBeforeCompile.toString(), which is identical across our variants (closure variables
+    // aren't visible to toString). Without these, program reuse skips our injectors.
+    const cacheKey =
+        wantsDitherWorld ? 'lambert-dithered' :
+        wantsDitherUV    ? 'lambert-dithered-uv' :
+                           'lambert-glitch';
+    mat.customProgramCacheKey = () => cacheKey;
 
     return mat;
 }
