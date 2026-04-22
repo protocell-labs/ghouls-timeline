@@ -110,7 +110,6 @@ export function initGUI(quantizePass) {
         pxInput.max = '20';
         pxInput.step = '1';
         pxInput.value = String(quantizePass.uniforms.pxFactor.value);
-        pxInput.style.cssText = 'width:60px;padding:4px 6px;border-radius:4px;border:1px solid #444;background:#111;color:#eee;font:12px/1.2 system-ui,sans-serif;';
         wrap.appendChild(pxInput);
 
         pxInput.addEventListener('input', () => {

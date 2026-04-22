@@ -299,11 +299,11 @@ export function updateTagColors(hexArray) {
     tagColor = secondLightestColor(hexArray);
     tagBgColor = darkestColor(hexArray);
 
-    if (container) {
-        container.style.setProperty('--tag-color', tagColor);
-        container.style.setProperty('--tag-color-dim', tagColor);
-        container.style.setProperty('--tag-bg', tagBgColor);
-    }
+    // Hoist to :root so both #tag-container and #gui-container consume the same palette
+    const root = document.documentElement;
+    root.style.setProperty('--tag-color', tagColor);
+    root.style.setProperty('--tag-color-dim', tagColor);
+    root.style.setProperty('--tag-bg', tagBgColor);
 
     tagElements.forEach((tag) => {
         tag.line.setAttribute('stroke', tagColor);
