@@ -16,6 +16,9 @@ let svgLayer = null;
 let tagElements = [];
 const projVec = new THREE.Vector3();
 
+// Master on/off for the animated ring tags (default off)
+let tagsEnabled = false;
+
 // Palette colors
 let tagColor = '#cccccc';
 let tagBgColor = '#000000';
@@ -191,7 +194,22 @@ function applyGlitch(tag, birth, time) {
     tag.line.setAttribute('opacity', lineVis);
 }
 
+// Toggle the animated ring tags on/off. When turned off, hide everything immediately.
+export function setTagsEnabled(enabled) {
+    tagsEnabled = enabled;
+    if (!enabled) {
+        tagElements.forEach((tag) => {
+            tag.box.style.display = 'none';
+            tag.marker.style.display = 'none';
+            tag.line.setAttribute('visibility', 'hidden');
+            tag.visible = false;
+        });
+    }
+}
+
 export function updateTags(camera, time) {
+    if (!tagsEnabled) return;
+
     const halfW = window.innerWidth / 2;
     const halfH = window.innerHeight / 2;
 

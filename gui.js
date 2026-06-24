@@ -1,9 +1,9 @@
 import { PALETTES } from './palettes.js';
 import { setPalette } from './postprocessing.js';
 import { setMaterialType, setSkullGlitchEnabled, setDitherPalette, setDitherSurfacePx, setDitherUvDensity } from './skull.js';
-import { updateTagColors } from './tags.js';
+import { updateTagColors, setTagsEnabled } from './tags.js';
 
-export function initGUI(quantizePass) {
+export function initGUI(quantizePass, controls) {
     // Create one container for all GUI controls
     const guiWrap = document.createElement('div');
     guiWrap.id = 'gui-container';
@@ -205,6 +205,46 @@ export function initGUI(quantizePass) {
         guiWrap.appendChild(wrap);
     }
 
+    // Ring Tags GUI — animated tags-on-rings effect (default off)
+    function makeTagsGUI() {
+        const wrap = document.createElement('div');
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.style.gap = '6px';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = false;
+        setTagsEnabled(false);
+        checkbox.addEventListener('change', () => {
+            setTagsEnabled(checkbox.checked);
+        });
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode('RING TAGS'));
+        wrap.appendChild(label);
+        guiWrap.appendChild(wrap);
+    }
+
+    // Orbit Controls GUI — mouse orbit/zoom/pan (default off)
+    function makeOrbitGUI() {
+        const wrap = document.createElement('div');
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.style.gap = '6px';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = false;
+        if (controls) controls.enabled = false;
+        checkbox.addEventListener('change', () => {
+            if (controls) controls.enabled = checkbox.checked;
+        });
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode('ORBIT CONTROLS'));
+        wrap.appendChild(label);
+        guiWrap.appendChild(wrap);
+    }
+
     // Init palettes GUI - sets default palette at random
     makePaletteGUI(Object.keys(PALETTES)[Math.floor(Math.random() * Object.keys(PALETTES).length)]);
 
@@ -221,4 +261,6 @@ export function initGUI(quantizePass) {
 
     makeDitherGUI();
     makeGlitchGUI();
+    makeTagsGUI();
+    makeOrbitGUI();
 }

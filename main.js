@@ -17,9 +17,9 @@ import { initTags, updateTags } from './tags.js';
 // GLOBALS
 
 let cameraPosition = { // camera position (X - horizontal, Y - height, Z - depth)
-    x: -100, // 0
-    y: -400, // -150
-    z: 400 // 250
+    x: -70,
+    y: -280,
+    z: 280
 };
 let cameraTarget = { // look-at point (X - horizontal, Y - height, Z - depth)
     x: 0, // 0
@@ -85,7 +85,7 @@ const { bloomComposer, bloomPass, quantizePass } = initPostProcessing(renderer, 
 
 // Initialize tags first (creates DOM), then GUI (sets palette colors on tags)
 initTags();
-initGUI(quantizePass);
+initGUI(quantizePass, controls);
 
 
 scene.add(head);
