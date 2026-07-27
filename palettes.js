@@ -2,7 +2,7 @@
 
 // 🎮 CGA 8-color (IBM PC, 1981)
 const palette_cga8 = [
-    '#000000', // black
+    '#080808', // black
     '#55ffff', // cyan
     '#ff55ff', // magenta
     '#ffffff', // white
@@ -14,7 +14,7 @@ const palette_cga8 = [
 
 // 🕹️ Commodore 64 base colors
 const palette_c64 = [
-    '#000000', // black
+    '#080808', // black
     '#ffffff', // white
     '#880000', // red
     '#aaffee', // cyan
@@ -34,7 +34,7 @@ const palette_gameboy = [
 
 // 🌈 ZX Spectrum bright set
 const palette_zx_spectrum = [
-    '#000000', // black
+    '#080808', // black
     '#ff0000', // bright red
     '#00ff00', // bright green
     '#0000ff', // bright blue
@@ -46,7 +46,7 @@ const palette_zx_spectrum = [
 
 // 🖥️ Windows / EGA 16-color cutdown
 const palette_ega8 = [
-    '#000000', // black
+    '#080808', // black
     '#800000', // maroon
     '#008000', // green
     '#808000', // olive
@@ -58,7 +58,7 @@ const palette_ega8 = [
 
 // 🎨 VGA 16-color (standard DOS palette)
 const palette_vga16 = [
-    '#000000', // black
+    '#080808', // black
     '#0000AA', // blue
     '#00AA00', // green
     '#00AAAA', // cyan
@@ -78,7 +78,7 @@ const palette_vga16 = [
 
 // 🕹️ Commodore 64 full 16-color palette
 const palette_c64_16 = [
-    '#000000', // black
+    '#080808', // black
     '#FFFFFF', // white
     '#880000', // red
     '#AAFFEE', // cyan
@@ -98,7 +98,7 @@ const palette_c64_16 = [
 
 // 🌈 ZX Spectrum 16-color (bright + normal versions)
 const palette_zx_spectrum16 = [
-    '#000000', // black
+    '#080808', // black
     '#0000D7', // blue
     '#D70000', // red
     '#D700D7', // magenta
@@ -118,7 +118,7 @@ const palette_zx_spectrum16 = [
 
 // 🖥️ EGA 16-color (classic PC graphics)
 const palette_ega16 = [
-    '#000000', // black
+    '#080808', // black
     '#0000AA', // blue
     '#00AA00', // green
     '#00AAAA', // cyan
@@ -146,7 +146,7 @@ const palette_gameboy16 = [
 
 // 🟤 LCARS Style (Star Trek UI color scheme)
 const palette_lcars = [
-    '#000000', '#ff9966', '#ffcc66', '#ff6699',
+    '#080808', '#ff9966', '#ffcc66', '#ff6699',
     '#cc66ff', '#9966ff', '#6699ff', '#66ccff',
     '#66ffcc', '#66ff99', '#99ff66', '#ccff66',
     '#ffcc99', '#ff99cc', '#ff66cc', '#ffffff'
@@ -154,7 +154,7 @@ const palette_lcars = [
 
 // 🟠 Retro EVA / Magi System (inspired by Neon Genesis Evangelion HUDs)
 const palette_eva = [
-    '#000000', '#ff3300', '#ff6600', '#ff9900',
+    '#080808', '#ff3300', '#ff6600', '#ff9900',
     '#ffcc00', '#ffff00', '#00ffcc', '#00ffff',
     '#00ccff', '#0099ff', '#0066ff', '#0033ff',
     '#ff0033', '#ff0066', '#ff0099', '#ffffff'
@@ -162,49 +162,49 @@ const palette_eva = [
 
 // 🟢 Classic Monochrome Green CRT (8 shades)
 const palette_green_mono = [
-    '#000000', '#003300', '#006600', '#00aa00',
+    '#080808', '#003300', '#006600', '#00aa00',
     '#00cc00', '#00ff00', '#aaffaa', '#ffffff'
 ];
 
 // 🟡 Amber Monochrome CRT (8 shades)
 // with BMAS color '#f29b30'
 const palette_amber_mono = [
-    '#000000', '#663300', '#ff5c00',
+    '#080808', '#663300', '#ff5c00',
     '#cc6600', '#f29b30', '#ffff00'
 ];
 
 // old Amber Monochrome CRT
 /*const palette_amber_mono = [
-    '#000000', '#331900', '#663300', '#ff5c00',
+    '#080808', '#331900', '#663300', '#ff5c00',
     '#cc6600', '#ffaa55', '#ffd4aa', '#ffffff'
 ];*/
 
 // 🟣 Magenta / Pink Monochrome (8 shades)
 const palette_magenta_mono = [
-    '#000000', '#330033', '#660066', '#990099',
+    '#080808', '#330033', '#660066', '#990099',
     '#cc00cc', '#ff00ff', '#ff99ff', '#ffffff'
 ];
 
 // 🔵 Classic Monochrome Blue CRT (8 shades)
 const palette_blue_mono = [
-    '#000000', '#000033', '#000066', '#0000aa',
+    '#080808', '#000033', '#000066', '#0000aa',
     '#0000cc', '#0000ff', '#aaaaff', '#ffffff'
 ];
 
 // 🔵 Cyan-Tinted Monochrome CRT (8 shades)
 const palette_cyan_mono = [
-    '#000000', '#003333', '#006666', '#009999',
+    '#080808', '#003333', '#006666', '#009999',
     '#00cccc', '#00ffff', '#aaffff', '#ffffff'
 ];
 
 // ⚫️⚪️ Black & white (2 shades)
 const palette_mono = [
-    '#000000', '#ffffff'
+    '#080808', '#ffffff'
 ];
 
 // 🌫️ Silent Hill — foggy, muted, unsettling
 const palette_silent_hill = [
-    '#1a1a1a', // near-black
+    '#080808', // near-black
     '#3d3d3d', // dark gray
     '#6b6b6b', // medium gray
     '#8c7b6b', // warm gray-brown
@@ -216,7 +216,7 @@ const palette_silent_hill = [
 
 // 🧟 Resident Evil — dark, moody, cold with warm accents
 const palette_resident_evil = [
-    '#0a0a0a', // deep black
+    '#080808', // deep black
     '#1a1a2a', // blue-black
     '#3d2a2a', // dark blood
     '#5c3a2a', // dried rust
@@ -240,7 +240,7 @@ const palette_ridge_racer = [
 
 // 🎮 PS1 Boot — Sony startup screen palette
 const palette_ps1_boot = [
-    '#000000', // black
+    '#080808', // black
     '#1a1a1a', // dark gray
     '#4a4a4a', // medium gray
     '#8a8a8a', // light gray
